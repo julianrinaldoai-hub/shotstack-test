@@ -1,2 +1,3 @@
 # Shotstack ingest manifest: contains public media URLs; keep local only
 ingest-manifest*.json
+edit-plan-a.stage.json
