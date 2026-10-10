@@ -1,6 +1,6 @@
 # Version 3 — Editorial Cut (new source material)
 
-**Status:** PROPOSAL, awaiting approval. Nothing has been uploaded, no Shotstack edit created, nothing rendered.
+**Status:** Approved. Built and opened in Shotstack Studio for preview. **Not rendered.** Files: `edit-plan-c.draft.json` (placeholders, committed), `edit-plan-c.stage.json` (real sandbox URLs, git-ignored), built by `tools/build_v3.py`. Small trim adjustments from exact easing-curve budgeting: #6a trim 3.42 at 0.72x, #6b trim 2.36, #7 trim 1.00.
 **Source:** `testmaterial-7f245e5c.zip` (sha256 prefix `d260b9659a6f0f1f`), analysed from scratch. Previous material and plans are not used.
 **Exact numbers:** `tools/plan_v3.py` computes every time, speed curve and source range below.
 
