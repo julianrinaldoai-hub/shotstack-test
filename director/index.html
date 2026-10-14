@@ -90,6 +90,12 @@ label.style b { font-family: var(--f-display); letter-spacing: 0.08em; font-size
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 .role { display: inline-block; padding: 1px 7px; border-radius: 4px; color: var(--panel); font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
 td.reason { min-width: 220px; max-width: 360px; }
+#pv-cliptable td.mono, #pv-shots td.mono { white-space: nowrap; }
+.musicpick { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.musicpick:empty { display: none; }
+.musicpick dt { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.musicpick dd { margin: 2px 0 0; }
+.musicpick .why { grid-column: 1 / -1; }
 .issues li { margin: 2px 0; }
 .issues .e { color: var(--bad); } .issues .w { color: var(--warn); }
 
@@ -176,6 +182,12 @@ video { width: 100%; max-width: 100%; border-radius: 8px; background: #000; aspe
           <div><h3>Clip-Analyse</h3><p id="pv-clips"></p></div>
           <div><h3>Musik-Analyse</h3><p id="pv-music"></p></div>
         </div>
+        <div class="musicpick" id="pv-music-pick"></div>
+        <h3 style="margin-top:14px">Source Clips</h3>
+        <div class="tablebox"><table>
+          <thead><tr><th>Clip</th><th>Raum / Szene</th><th>Wichtigkeit</th><th>Nutzbar</th><th>Stärkster Teil</th><th>Empfohlene Nutzung</th><th>Schwächen</th><th>Im Plan</th></tr></thead>
+          <tbody id="pv-cliptable"></tbody>
+        </table></div>
         <h3 style="margin-top:14px">Timeline</h3>
         <div class="timeline" id="pv-timeline"></div>
         <div class="legend" id="pv-legend"></div>
@@ -275,6 +287,35 @@ function musicIndex(map) {
   return { duration: map.duration, barLen: r4(barLen), steady: !!map.steady, bars, sections: map.sections || [], drops: map.drops || [],
     cutPoints: [...new Set(bars.flatMap(b => [b.t, r4((b.t + b.end) / 2)]))].sort((a, b) => a - b) };
 }
+// Start-point hints for ONE continuous music excerpt per target length: short build, peak in the back half, clean ending.
+// Purely descriptive facts plus a heuristic score; the director chooses.
+function musicStarts(mi, lengths = [20, 25, 30, 35, 40], perLength = 3) {
+  const E = b => b.energy ?? 0, accents = [...mi.drops.map(d => ({ t: d.time, k: "drop" })), ...mi.sections.map(x => ({ t: x.time, k: x.change === "fall" ? "fall" : "rise" }))].filter(x => x.t != null);
+  const out = [];
+  for (const target of lengths) {
+    const cands = [], n = Math.max(4, Math.round(target / mi.barLen));
+    for (const b0 of mi.bars) {
+      // whole bars: the excerpt ends on a bar line (or the track end)
+      const t0 = b0.t, t1 = mi.bars[b0.i + n]?.t ?? (b0.i + n === mi.bars.length ? mi.duration : null); if (t1 == null) break;
+      const L = r4(t1 - t0);
+      const win = mi.bars.filter(b => b.t >= t0 - 1e-3 && b.t < t1 - 1e-3); if (win.length < 4) continue;
+      const intro = (E(win[0]) + E(win[1])) / 2, peak = win.reduce((m, b) => E(b) > E(m) ? b : m, win[0]);
+      const rel = x => r4(x - t0), inWin = accents.filter(x => x.t > t0 + 0.05 && x.t < t1 - 0.05);
+      const endBar = nearest(mi.bars.map(b => b.t).concat([mi.duration]), t1), endGap = Math.abs(endBar - t1);
+      const endAccent = accents.find(x => Math.abs(x.t - t1) < mi.barLen * 0.6);
+      const lastE = win.slice(-2).reduce((a, b) => a + E(b), 0) / 2;
+      const peakPos = (peak.t - t0) / L;
+      const score = 2 * (E(peak) - intro) - 1.5 * Math.abs(peakPos - 0.7) + (endAccent || Math.abs(mi.duration - t1) < 0.5 ? 0.4 : 0) - (endGap > 0.15 ? 0.2 : 0)
+        + (accents.some(x => Math.abs(x.t - t0) < 0.1) || t0 < mi.barLen * 1.5 ? 0.25 : 0) + (inWin.some(x => x.k !== "fall") ? 0.2 : 0);
+      cands.push({ target, bars: n, length: L, start: t0, end: r4(t1), score: +score.toFixed(3), introEnergy: +intro.toFixed(2), peakEnergy: E(peak), peakAt: rel(peak.t), endEnergy: +lastE.toFixed(2),
+        accents: inWin.map(x => `${x.k}@+${rel(x.t).toFixed(2)}s`), ending: endAccent ? `${endAccent.k} at end` : Math.abs(mi.duration - t1) < 0.5 ? "track end" : endGap <= 0.15 ? "on a bar line" : "mid-bar" });
+    }
+    cands.sort((x, y) => y.score - x.score);
+    const picked = []; for (const c of cands) { if (picked.every(p => Math.abs(p.start - c.start) > mi.barLen * 3.5)) picked.push(c); if (picked.length >= perLength) break; }
+    out.push(...picked);
+  }
+  return out;
+}
 const nearest = (arr, x) => arr.reduce((best, v) => Math.abs(v - x) < Math.abs(best - x) ? v : best, arr[0] ?? x);
 
 // Validate a director plan against hard technical constraints; returns normalized shots + issues
@@ -300,6 +341,10 @@ function validatePlan(plan, ctx) {
     const c = ctx.clips[s.clip];
     if (!c) { errors.push(`Shot ${s.n}: unbekannter oder nicht ausgewählter Clip "${s.clip}".`); continue; }
     s.filename = c.filename;
+    // the director picks the visible source range first; constant speed may follow from it ("auto")
+    const want = s.sourceEnd != null && s.sourceEnd !== "" ? +s.sourceEnd : null;
+    if ((s.speed == null || s.speed === "auto") && want != null) s.speed = Math.round((want - +s.sourceIn) / s.length * 100) / 100;
+    if (s.speed == null || s.speed === "auto") s.speed = 1;
     const rs = rampsOf(s.speed);
     const vals = rs ? rs.flatMap(k => [+k.from, +k.to]) : [+(s.speed ?? 1)];
     if (vals.some(v => !(v >= 0.25 && v <= 3))) errors.push(`Shot ${s.n}: Speed außerhalb 0,25–3×.`);
@@ -320,39 +365,56 @@ function validatePlan(plan, ctx) {
     const lead = tin === "dissolve" ? d * speedAt(s.speed, 0) : 0;
     const used = srcUsed(s.speed, s.length);
     s.sourceOut = r4(s.sourceIn + used);
+    if (want != null && Math.abs(want - s.sourceOut) > 0.08) warnings.push(`Shot ${s.n}: geplantes Source-Ende ${want.toFixed(2)}s, mit Speed ${speedLabel(s.speed)} tatsächlich ${s.sourceOut.toFixed(2)}s.`);
     const a = s.sourceIn - lead, b = s.sourceOut;
     if (a < -1e-3) errors.push(`Shot ${s.n}: Source In ${s.sourceIn.toFixed(2)}s zu früh (Dissolve braucht ${lead.toFixed(2)}s Vorlauf).`);
     if (b > c.duration - 0.01) errors.push(`Shot ${s.n}: braucht Footage bis ${b.toFixed(2)}s, ${c.filename} ist nur ${c.duration.toFixed(2)}s lang (${(b - c.duration).toFixed(2)}s zu viel).`);
     for (const cut of c.cuts || []) if (a < cut + 0.06 && b > cut - 0.06) errors.push(`Shot ${s.n}: läuft über den harten Schnitt in ${c.filename} bei ${cut.toFixed(2)}s.`);
+    if (c.usable && (a < c.usable[0] - 0.1 || b > c.usable[1] + 0.1)) errors.push(`Shot ${s.n}: zeigt ${Math.max(0, a).toFixed(2)}–${b.toFixed(2)}s von ${c.filename}, nutzbar laut Bildanalyse nur ${c.usable[0].toFixed(2)}–${c.usable[1].toFixed(2)}s${c.weakEnd && b > c.usable[1] + 0.1 ? ` (Ende: ${c.weakEnd})` : c.weakStart && a < c.usable[0] - 0.1 ? ` (Anfang: ${c.weakStart})` : ""}.`);
     for (const av of c.avoid || []) if (a < av.to && b > av.from) warnings.push(`Shot ${s.n}: nutzt ${av.from.toFixed(1)}–${av.to.toFixed(1)}s von ${c.filename}, laut Analyse problematisch (${av.why}).`);
-    (ranges[s.clip] ||= []).push([a, b, s.n]);
+    (ranges[s.clip] ||= []).push([a, b, s.n, s.length, s.role, s.reuseReason]);
     if (s.n === shots.length && s.transitionOut === "fadeOut") s.fadeOut = +(s.transitionOutDuration ?? 1);
   }
   for (const [clip, rr] of Object.entries(ranges)) {
     rr.sort((x, y) => x[0] - y[0]);
     for (let i = 1; i < rr.length; i++) if (rr[i][0] < rr[i - 1][1] - 0.05) errors.push(`Shots ${rr[i - 1][2]} und ${rr[i][2]}: überlappende Quellbereiche in ${ctx.clips[clip]?.filename || clip} (dieselben Bilder doppelt).`);
+    const fn = ctx.clips[clip]?.filename || clip, byTime = [...rr].sort((x, y) => x[2] - y[2]);
+    if (rr.length > 2 && byTime.slice(2).some(u => !String(u[5] || "").trim())) errors.push(`${fn} kommt ${rr.length}× vor. Mehr als 2 Verwendungen nur mit reuseReason (begründete Ausnahme).`);
+    if (rr.length >= 2) { const [x, y] = byTime;
+      if (x[3] >= 1.8 && y[3] >= 1.8 && Math.abs(x[3] - y[3]) < 0.6) warnings.push(`${fn}: Shots ${x[2]} und ${y[2]} sind zwei fast gleich lange, lange Verwendungen. Besser einmal kurzer Insert, einmal länger.`);
+      if (String(x[4] || "").toLowerCase() === String(y[4] || "").toLowerCase()) warnings.push(`${fn}: Shots ${x[2]} und ${y[2]} haben dieselbe Rolle (${x[4]}). Eine zweite Verwendung sollte eine andere Funktion haben.`); }
   }
-  // music segments: inside the track, on downbeats, total = timeline
-  const m = plan.music || {}, segs = (m.segments || []).map(x => ({ trackStart: +x.trackStart, trackEnd: +x.trackEnd }));
-  if (!segs.length) errors.push("Kein Musikausschnitt angegeben.");
-  const downs = ctx.music.bars.map(b => b.t);
-  segs.forEach((g, i) => {
-    for (const key of ["trackStart", "trackEnd"]) {
-      const v = g[key]; if (key === "trackEnd" && i === segs.length - 1) continue;
-      const nb = nearest(downs, v);
-      if (Math.abs(nb - v) <= 0.09) g[key] = nb; else warnings.push(`Musiksegment ${i + 1}: ${key === "trackStart" ? "Start" : "Ende"} ${v.toFixed(2)}s liegt nicht auf einem Taktanfang (nächster: ${nb.toFixed(2)}s).`);
-    }
-    if (g.trackStart < 0 || g.trackEnd > ctx.music.duration + 0.01 || g.trackEnd - g.trackStart < 0.5) errors.push(`Musiksegment ${i + 1} (${g.trackStart.toFixed(2)}–${g.trackEnd.toFixed(2)}s) ist ungültig.`);
-  });
-  const musicLen = segs.reduce((a, g) => a + (g.trackEnd - g.trackStart), 0);
-  if (segs.length && Math.abs(musicLen - total) > 0.25) errors.push(`Musik dauert ${musicLen.toFixed(2)}s, Timeline ${total.toFixed(2)}s.`);
-  else if (segs.length) { const last = segs[segs.length - 1]; last.trackEnd = r4(last.trackEnd + (total - musicLen)); if (last.trackEnd > ctx.music.duration + 0.01) errors.push("Musik reicht nicht bis zum Ende der Timeline."); }
+  // dramaturgy hint: secondary rooms rarely open a property film (not a hard rule)
+  const first = shots[0] && ctx.clips[shots[0].clip];
+  if (first && first.category === "secondary") warnings.push(`Shot 1 eröffnet mit ${first.filename} (${first.room || "Nebenraum"}). Nebenräume sind normalerweise kein Opening.`);
+  // music: ONE continuous excerpt from music.start, exactly as long as the timeline (no internal cuts, no loops)
+  const m = plan.music || {};
+  if (Array.isArray(m.segments) && m.segments.length > 1) errors.push("Musik darf nicht geschnitten werden: genau ein durchgehender Ausschnitt (music.start).");
+  let mStart = m.start ?? m.segments?.[0]?.trackStart;
+  if (mStart == null || !isFinite(+mStart)) { errors.push("Kein Musik-Startpunkt (music.start) angegeben."); mStart = 0; }
+  mStart = +mStart;
+  const downs = ctx.music.bars.map(b => b.t), nb = nearest(downs, mStart);
+  if (Math.abs(nb - mStart) <= 0.09) mStart = nb; else warnings.push(`Musik-Start ${mStart.toFixed(2)}s liegt nicht auf einem Taktanfang (nächster: ${nb.toFixed(2)}s).`);
+  const mEnd = r4(mStart + total);
+  if (mStart < 0 || mEnd > ctx.music.duration + 0.01) errors.push(`Musik ${mStart.toFixed(2)}–${mEnd.toFixed(2)}s passt nicht in den Track (${ctx.music.duration.toFixed(2)}s). Früher starten oder kürzer schneiden.`);
+  const segs = [{ trackStart: r4(mStart), trackEnd: mEnd }];
+  // style-aware transition checks (soft: the director decides shot by shot)
+  const dis = shots.filter(s => s.transitionIn === "dissolve"), cutsN = Math.max(1, shots.length - 1), style = ctx.style || "";
+  const share = { DYNAMIC: 0.12, CINEMATIC: 0.25, ELEGANT: 0.4 }[style];
+  if (share != null && dis.length > Math.max(1, Math.round(share * cutsN))) warnings.push(`${dis.length} von ${cutsN} Schnitten sind Dissolves. Für ${style} zu viele weiche Übergänge, Hard Cuts bevorzugen.`);
+  const accents = [...ctx.music.drops.map(d => d.time), ...ctx.music.sections.filter(x => x.change === "rise").map(x => x.time)].filter(x => x != null);
+  for (const s of dis) {
+    const prev = shots[s.n - 2], next = shots[s.n];
+    if ((prev && prev.length < 1.0) || s.length < 1.0 || (next && next.length < 1.0 && s.length < 1.4)) warnings.push(`Shot ${s.n}: Dissolve mitten in einer schnellen Montage. Dort wirkt ein Hard Cut sauberer.`);
+    const tt = mStart + s.start; if (accents.some(x => Math.abs(x - tt) < 0.2)) warnings.push(`Shot ${s.n}: Dissolve genau auf einem Drop oder Anstieg der Musik (${tt.toFixed(2)}s im Track). Dort trifft ein Hard Cut härter.`);
+    if (!String(s.transitionReason || "").trim()) warnings.push(`Shot ${s.n}: Dissolve ohne transitionReason.`);
+  }
   // info: how many cuts land on the music grid
-  const toTrack = x => { let acc = 0; for (const g of segs) { const len = g.trackEnd - g.trackStart; if (x <= acc + len + 1e-6) return g.trackStart + (x - acc); acc += len; } return null; };
+  const toTrack = x => mStart + x;
   const cutsAt = shots.slice(1).map(s => s.start);
   const onGrid = cutsAt.filter(x => { const tt = toTrack(x); return tt != null && Math.abs(nearest(ctx.music.cutPoints, tt) - tt) <= 0.07; }).length;
   if (cutsAt.length) info.push(`${onGrid} von ${cutsAt.length} Schnitten liegen auf Takt oder halbem Takt.`);
-  return { errors, warnings, info, shots, total: r4(total), music: { segments: segs, fadeIn: +(m.fadeIn ?? 0.3), fadeOut: +(m.fadeOut ?? 1.0) } };
+  return { errors, warnings, info, shots, total: r4(total), music: { start: r4(mStart), end: mEnd, segments: segs, reason: m.startReason || "", fadeIn: +(m.fadeIn ?? 0.3), fadeOut: +(m.fadeOut ?? 1.0) } };
 }
 
 // Build Shotstack Edit JSON from a validated plan
@@ -549,33 +611,47 @@ function motionProfile(frames, times, W, H) {
       frames.push(g); times.push(+t.toFixed(4));
     }
     const prof = motionProfile(frames, times, W, H);
-    const thumbTimes = [0.15, dur * 0.36, dur * 0.64, dur - 0.2].map(t => +t.toFixed(2)).filter(t => !prof.cuts.some(c => Math.abs(c - t) < 0.15));
+    // frames across the whole clip (start, middle, end) so the review can see where it gets weak
+    const thumbTimes = [0.1, 0.2, 0.4, 0.6, 0.8].map(f => f * dur).concat([0.1, dur - 0.15]).map(t => +Math.min(dur - 0.1, Math.max(0.1, t)).toFixed(2))
+      .filter((t, i, a) => a.indexOf(t) === i).sort((x, y) => x - y).filter(t => !prof.cuts.some(c => Math.abs(c - t) < 0.15));
     const thumbs = [];
     for (const t of thumbTimes) { await seek(t); bx.drawImage(v, 0, 0, 512, 288); thumbs.push(await new Promise(r => big.toBlob(r, "image/jpeg", 0.82))); }
     v.removeAttribute("src"); v.load();
     return { duration: +dur.toFixed(3), ...prof, thumbTimes, thumbs };
   }
   async function visualReview(asset, m, maxImages) {
-    const imgs = m.thumbs.slice(0, maxImages);
+    // keep start, end and evenly spread middle frames when the image limit is lower than the frame count
+    let idx = m.thumbs.map((_, i) => i);
+    if (idx.length > maxImages) { const k = Math.max(2, maxImages); idx = [...new Set(Array.from({ length: k }, (_, j) => Math.round(j * (m.thumbs.length - 1) / (k - 1))))]; }
+    const imgs = idx.map(i => m.thumbs[i]), times = idx.map(i => m.thumbTimes[i]);
     const prompt = `You review one AI-generated real-estate video clip for a premium property film. Be a strict, experienced editor.
-The ${imgs.length} attached images are frames from the clip at ${m.thumbTimes.slice(0, imgs.length).join("s, ")}s. Clip length ${m.duration}s.
+The ${imgs.length} attached images are frames from the clip in time order, at ${times.join("s, ")}s. Clip length ${m.duration}s.
 Measured camera motion per 0.5 s window (percent of frame per second; panX>0 means image content moves right, i.e. camera moves left; push>0 means push-in, <0 pull-back): ${JSON.stringify(m.windows)}.
 Detected hard cuts inside the file (never cross these): ${JSON.stringify(m.cuts)}.
-Assess content and quality. Look hard for AI generation errors (deformed or merged furniture, melting objects, impossible geometry, warped lines), unflattering details (toilets prominent, clutter), and weak framing.
-Return JSON only: {"room": string, "description": string (max 30 words), "strengths": string, "quality": integer 1-10, "heroPotential": "high"|"medium"|"low", "issues": [{"type":"ai_artifact"|"composition"|"unflattering"|"other","note":string,"from":number,"to":number}], "usable": [{"from":number,"to":number,"note":string}], "avoid": [{"from":number,"to":number,"why":string}]}. Times in seconds of the source clip.`;
+
+1. What is it? Room or scene type and its role in a property presentation. Primary spaces: exterior/building, living room, open living/dining, kitchen, master bedroom, terrace/garden/pool, a striking architectural space. Secondary spaces: bathroom, WC, small hallway, storage, utility, small detail. Judge importance for the property (5 = a hero space buyers care most about, 1 = filler).
+2. Go frame by frame from start to end. Decide when the room reads well and when it stops working: the camera gets too close to an object (e.g. only a shower head or a wall fills the frame), perspective or composition gets worse, AI artifacts increase (deformed or merged furniture, melting objects, impossible geometry, warped lines), unflattering details (toilet prominent, clutter), or the frame gets boring. Interpolate times between frames from the motion data.
+3. usableStart/usableEnd: the range that may be shown at all. strongestStart/strongestEnd: the best part inside it. A clip does not have to be usable to its end; cut weak beginnings or endings off. Say why in weakStartReason/weakEndReason ("" if the start/end is fine).
+
+Return JSON only: {"room": string, "roomType": "exterior"|"living"|"living_dining"|"kitchen"|"dining"|"bedroom"|"bathroom"|"wc"|"hallway"|"storage"|"terrace_garden"|"detail"|"other", "category": "primary"|"secondary"|"detail", "importance": integer 1-5, "openingSuitability": "high"|"medium"|"low", "description": string (max 30 words), "strengths": string, "quality": integer 1-10, "heroPotential": "high"|"medium"|"low",
+ "usableStart": number, "usableEnd": number, "strongestStart": number, "strongestEnd": number, "weakStartReason": string, "weakEndReason": string,
+ "frames": [{"t": number, "note": string (max 12 words)}], "speedAdvice": string (max 20 words: may it be sped up or slowed down, and in which range),
+ "recommendedUsage": string (max 15 words, e.g. "opener", "long hero 2.5-3 s", "short insert 0.5-1 s", "skip"), "weaknesses": [string],
+ "issues": [{"type":"ai_artifact"|"composition"|"unflattering"|"too_close"|"other","note":string,"from":number,"to":number}], "avoid": [{"from":number,"to":number,"why":string}]}. Times in seconds of the source clip.`;
     return S.sample.json(prompt, { images: imgs, modelTier: "default", cache: { gcTime: 86400000 } });
   }
+  const CLIP_V = 2; // v2: room role, usable/strongest ranges, frame notes
   async function ensureClipAnalysis(ids, force) {
     const lim = await S.sample.limits().catch(() => null);
     const maxImg = lim?.images?.maxCount || 0;
     for (const id of ids) {
-      if (!force && S.clipA[id]?.v === 1) continue;
+      if (!force && S.clipA[id]?.v === CLIP_V) continue;
       const a = S.assets.find(x => x.id === id); if (!a) continue;
       log(`Analysiere ${a.filename}: Bilder und Bewegung …`);
       let m; try { m = await sampleFrames(a); } catch (e) { log(`${a.filename}: ${e.message}. Clip wird ohne Bildanalyse verwendet.`, "warn"); m = { duration: +a.duration, cuts: [], windows: [], thumbs: [], thumbTimes: [] }; }
       let vis = null;
       if (maxImg && m.thumbs.length) { log(`${a.filename}: Claude prüft Inhalt und Qualität …`); try { vis = await visualReview(a, m, maxImg); } catch (e) { log(`${a.filename}: ${sampleMsg(e)}`, "warn"); } }
-      const doc = { v: 1, assetId: id, filename: a.filename, duration: m.duration || +a.duration, cuts: m.cuts, windows: m.windows, medianChange: m.medianChange ?? null, visual: vis, analyzedAt: new Date().toISOString() };
+      const doc = { v: CLIP_V, assetId: id, filename: a.filename, duration: m.duration || +a.duration, cuts: m.cuts, windows: m.windows, medianChange: m.medianChange ?? null, visual: vis, analyzedAt: new Date().toISOString() };
       await S.db.collection("clipAnalysis").doc(id).set(doc); S.clipA[id] = doc;
       log(`${a.filename}: fertig${m.cuts.length ? `, harter Schnitt bei ${m.cuts.join(", ")}s` : ""}${vis ? `, Qualität ${vis.quality}/10` : ""}.`, "ok");
     }
@@ -601,14 +677,25 @@ Return JSON only: {"room": string, "description": string (max 30 words), "streng
 
   // ---------- director ----------
   const STYLE_DIR = {
-    ELEGANT: "ELEGANT: refined, graceful, confident restraint. Interpret this freely for this material and this music.",
-    DYNAMIC: "DYNAMIC: energetic, rhythmic, driven by the music. Interpret this freely for this material and this music.",
-    CINEMATIC: "CINEMATIC: dramatic, story-driven, strong contrast between moments. Interpret this freely for this material and this music."
+    ELEGANT: `ELEGANT: refined, graceful, confident restraint. Interpret this freely for this material and this music.
+Transitions: soft transitions may appear somewhat more often than in other styles (short crossfades/dissolves of about 0.3-0.6 s, clean softer changes), but Elegant does NOT mean a crossfade between every clip. Many plain hard cuts are right here too wherever they look cleaner. Use a dissolve only where it actually improves that particular cut.`,
+    DYNAMIC: `DYNAMIC: energetic, rhythmic, driven by the music. Interpret this freely for this material and this music.
+Transitions: prefer hard cuts, beat cuts and fast direct changes. Soft transitions only rarely and on purpose. Never put soft transitions inside fast montage bursts.`,
+    CINEMATIC: `CINEMATIC / EPIC: dramatic, story-driven, strong contrast between moments. Interpret this freely for this material and this music.
+Transitions: hard cuts are frequent here too, especially on strong beats, on drops, between strong hero shots and in fast musical passages. A filmic transition (dissolve) is allowed selectively where it really fits, but not constantly.`
   };
+  function usableOf(c) {
+    const v = c?.visual, d = +(c?.duration || 0); if (!v) return null;
+    const a = Math.max(0, +v.usableStart), b = Math.min(d || Infinity, +v.usableEnd);
+    return isFinite(a) && isFinite(b) && b - a >= 0.3 ? [r4(a), r4(b)] : null;
+  }
   function clipBriefs(sel) {
     return sel.clips.map(id => {
-      const a = S.assets.find(x => x.id === id), c = S.clipA[id] || {};
-      return { id, file: a.filename, duration: c.duration || a.duration, hardCuts: c.cuts || [], motion: c.windows || [], visual: c.visual || null };
+      const a = S.assets.find(x => x.id === id), c = S.clipA[id] || {}, v = c.visual || null;
+      return { id, file: a.filename, duration: c.duration || a.duration, hardCuts: c.cuts || [], motion: c.windows || [],
+        visual: v && { room: v.room, roomType: v.roomType, category: v.category, importance: v.importance, openingSuitability: v.openingSuitability, description: v.description, strengths: v.strengths, quality: v.quality, heroPotential: v.heroPotential,
+          usable: usableOf(c), strongest: [v.strongestStart, v.strongestEnd], weakStartReason: v.weakStartReason, weakEndReason: v.weakEndReason, frames: v.frames, speedAdvice: v.speedAdvice,
+          recommendedUsage: v.recommendedUsage, weaknesses: v.weaknesses, issues: v.issues, avoid: v.avoid } };
     });
   }
   function musicBrief(mi) {
@@ -617,46 +704,70 @@ Return JSON only: {"room": string, "description": string (max 30 words), "streng
   }
   function previousSummary(sig, style) {
     return S.plans.filter(p => p.signature === sig && p.style === style && p.plan).slice(-4).map(p => ({
-      concept: p.plan.concept, music: p.validation?.music?.segments || p.plan.music?.segments,
+      concept: p.plan.concept, musicStart: p.validation?.music?.start ?? p.validation?.music?.segments?.[0]?.trackStart, length: p.validation?.total,
       shots: (p.plan.shots || []).map(s => `${S.assets.find(a => a.id === s.clip)?.filename || s.clip} ${(+s.sourceIn).toFixed(2)}s ${(+s.end - +s.start).toFixed(2)}s ${s.role}`)
     }));
   }
-  function directorPrompt(sel, style, mi, prev) {
-    return `You are the creative director and editor of a premium real-estate commercial. Decide the whole edit yourself.
+  function directorPrompt(sel, style, mi, prev, musicName) {
+    return `You are the creative director and editor of a premium real-estate film. Decide the whole edit yourself.
 
 STYLE DIRECTION (a direction, not a template): ${STYLE_DIR[style]}
 
-SOURCE CLIPS (each about 4 s, AI-generated). "motion" = measured camera motion per 0.5 s (percent of frame per second; panX>0: content moves right = camera moves left; push>0: push-in). "hardCuts" = cuts inside the file. "visual" = an editor's review of the frames (quality, issues, usable/avoid ranges in source seconds):
+PRIORITIES when decisions compete (1 wins over 2, and so on):
+1. a visually good clip range on screen
+2. a sensible real-estate tension arc
+3. music sync
+4. style
+5. variation / creativity
+6. using as many clips as possible
+Leaving out weak parts of a clip, or a whole weak clip, is completely fine.
+
+SOURCE CLIPS (each about 4 s, AI-generated). "motion" = measured camera motion per 0.5 s (percent of frame per second; panX>0: content moves right = camera moves left; push>0: push-in). "hardCuts" = cuts inside the file. "visual" = a frame-by-frame editor's review: room type and category, importance for the property, usable range (only these source seconds may be shown), strongest range, why the start/end is weak, notes per frame, speed advice, recommended usage:
 ${JSON.stringify(clipBriefs(sel))}
 
-MUSIC (from Shotstack analysis). bars = [index, start time s, energy 0-1, onset count]. sections: change rise/fall at bar. Use bar starts and half-bar points as cut points; let energy and sections shape the pacing:
+MUSIC "${musicName}" (from Shotstack analysis). bars = [index, start time s, energy 0-1, onset count]. sections: change rise/fall at time. drops: big hits:
 ${JSON.stringify(musicBrief(mi))}
 
-YOUR CREATIVE FREEDOM: You decide order, which clips are strong or weak, which to shorten or leave out, which to reuse (only with different, non-overlapping source ranges that make sense), every source in-point, shot lengths, hero shots, montage bursts, speed changes and ramps, cuts or transitions, and which part(s) of the music to use (you may edit the music on bar lines if the sections repeat). There is no fixed pattern: build this edit from this material and this music.
+MUSIC IS NEVER CUT. Choose ONE start point in the track. From there the music plays continuously until the video ends: no jumps to another part of the song, no repeats or loops, no internal music cuts. The video adapts to the music, not the other way round. Pick the start (on a bar start) and the video length together so this excerpt gives a good arc for the film: a short build-up, a good entry, a drop or peak at a sensible moment, a usable ending. Computed start candidates per length (hints with facts and a heuristic score, not a ranking you must follow): ${JSON.stringify(musicStarts(mi))}
+
+REAL-ESTATE DRAMATURGY. Think in roles: opening/hook, establishing, hero rooms, secondary rooms, details/inserts, energy burst, finale (a breath is fine too). Not every room matters equally: big, visually strong spaces get more screen time, secondary rooms appear shorter, details work as short inserts. Ask for every clip not only "does it look good?" but "what role does this room play in this property and where in the film does it make sense?". Open with an exterior/building, a strong outdoor shot, a large living room, open living/dining, an architecturally strong room or an especially impressive hero shot. Bathrooms, WCs, small hallways, storage and small details normally come later or as short inserts. This is not a hard rule: if a bathroom is exceptional and the strongest shot of all the material, you may decide otherwise, and say why.
+
+USABLE RANGE FIRST, THEN LENGTH, THEN SPEED. For every shot first pick the visible source range inside the clip's usable range (prefer the strongest range for hero moments), then the shot length, and only then the speed. Bad, too close, distorted or boring end ranges are dropped: a clip never has to be used to its end. Do NOT speed a clip up just to fit all of its seconds in. If only 2 s of a 4 s clip look good, use those 2 s cleanly.
+- Speed up only if the whole used range works visually, the movement really looks better faster, and no bad end frames or AI artifacts become visible.
+- Slow down only if there are enough good frames, the movement is stable, and the slowed shot looks high-end.
+- Give sourceEnd for every shot. For a constant speed you may set "speed": "auto", then speed = (sourceEnd - sourceIn) / shot length.
+
+REPETITION. A source clip normally appears at most 2 times. A third use only in a well-justified exception (then set "reuseReason"). When a clip appears twice: clearly different source ranges, a different function in the edit, and not two nearly identical long uses. Good: a 0.4-1.0 s insert during a montage, later a longer 1.5-3.7 s room shot. Bad: 0.0-3.0 s, later 0.3-3.3 s, later 0.5-3.5 s.
+
+TRANSITIONS: decide shot by shot which transition looks best between exactly these two shots at exactly this moment of the music. Not "style X = always crossfade". Hard cuts land on beats and especially on drops and rises; never soften a drop. For every non-cut transition give "transitionReason".
+
+YOUR CREATIVE FREEDOM: within these principles you decide order, which clips are strong or weak, which to shorten or leave out, reuse, every source range, shot lengths, hero shots, montage bursts, speed changes and ramps, transitions, the music start and the film length. There is no fixed pattern: build this edit from this property, these clips, their quality, this music and this style.
 
 HARD TECHNICAL RULES (a validator checks them):
 - Timeline in seconds, 24 fps. Shots are contiguous: shot 1 starts at 0, every shot starts exactly where the previous ends.
-- Total length 18-45 s. The music segments, played one after another, must last exactly the timeline length.
-- Music segment boundaries should be bar starts from the list (the last end may be anywhere).
-- speed: a number (0.5-2.0 recommended, 0.25-3 allowed) or a list of ramps [{"from":x,"to":y,"at":seconds into the shot,"over":seconds,"easing":"easeIn"|"easeOut"|"easeInOut"|"linear"}]. Before the first ramp the first "from" holds, after the last the last "to" holds.
-- Source footage used = speed integrated over the shot length (constant speed s over L seconds uses s×L seconds). sourceIn + used must stay within the clip duration and must not cross a hard cut.
-- transitionIn: "cut" (default), "dissolve" (0.3-1.0 s, needs sourceIn >= duration×speed for the overlap) or "fadeIn" (first shot only). Last shot may have transitionOut "fadeOut" with transitionOutDuration.
+- Total length 18-45 s. music.start + total length must stay within the track (${mi.duration.toFixed(2)} s).
+- Every shot shows only source seconds inside the clip's usable range (incl. a dissolve's lead-in).
+- speed: a number (0.5-2.0 recommended, 0.25-3 allowed), "auto", or a list of ramps [{"from":x,"to":y,"at":seconds into the shot,"over":seconds,"easing":"easeIn"|"easeOut"|"easeInOut"|"linear"}]. Before the first ramp the first "from" holds, after the last the last "to" holds.
+- Source footage used = speed integrated over the shot length (constant speed s over L seconds uses s×L seconds). It must stay within the clip and must not cross a hard cut.
+- transitionIn: "cut" (default), "dissolve" (0.3-1.0 s, needs sourceIn - duration×speed inside the usable range for the overlap) or "fadeIn" (first shot only). Last shot may have transitionOut "fadeOut" with transitionOutDuration.
 ${prev.length ? `
 PREVIOUS PLANS for exactly this material and style (summaries):
 ${JSON.stringify(prev)}
-Create a GENUINELY NEW plan: a different concept, a different opening, different hero choices, a different structure and different music usage where sensible. Do not reuse a previous shot list with small changes. It must still be a strong, sensible edit.` : ""}
+Create a GENUINELY NEW plan: a different concept, a different opening, different hero choices, a different structure and a different music start where sensible. Do not reuse a previous shot list with small changes. It must still be a strong, sensible edit.` : ""}
 
 Return JSON only:
-{"concept": string (one sentence), "clipAnalysis": string (2-4 sentences: strongest/weakest clips and why), "musicAnalysis": string (2-4 sentences: structure, lifts, where to breathe), "arc": string (2-4 sentences: the planned tension curve),
- "music": {"segments": [{"trackStart": number, "trackEnd": number}], "fadeIn": number, "fadeOut": number},
- "shots": [{"clip": clip id, "sourceIn": number, "start": number, "end": number, "speed": number or ramps, "transitionIn": string, "transitionDuration": number, "transitionOut": "fadeOut" (last shot only, optional), "transitionOutDuration": number, "role": short label like "hero", "montage", "build", "breath", "reveal", "outro", "reason": string (max 20 words)}],
+{"concept": string (one sentence), "clipAnalysis": string (2-4 sentences: which rooms carry the property, strongest/weakest clips and why), "musicAnalysis": string (2-4 sentences: structure, lifts, where to breathe), "arc": string (2-4 sentences: the planned tension curve),
+ "music": {"start": number (seconds in the track, a bar start), "startReason": string (1-2 sentences: why this start gives the best arc for this length), "fadeIn": number, "fadeOut": number},
+ "clips": [{"clip": clip id, "importance": integer 1-5 within THIS property, "plannedUsage": string (max 15 words)}],
+ "shots": [{"clip": clip id, "sourceIn": number, "sourceEnd": number, "start": number, "end": number, "speed": number or "auto" or ramps, "transitionIn": string, "transitionDuration": number, "transitionReason": string (non-cut only), "transitionOut": "fadeOut" (last shot only, optional), "transitionOutDuration": number, "role": one of "opening", "establishing", "hero", "secondary", "insert", "burst", "breath", "finale", "reason": string (max 25 words: why exactly this range of the clip), "reuseReason": string (only for a 3rd use)}],
  "omitted": [{"clip": clip id, "reason": string}]}`;
   }
-  function ctxFor(sel, mi) {
+  function ctxFor(sel, mi, style) {
     const clips = {};
-    for (const id of sel.clips) { const a = S.assets.find(x => x.id === id), c = S.clipA[id] || {};
-      clips[id] = { filename: a.filename, url: a.url, duration: +(c.duration || a.duration), cuts: c.cuts || [], avoid: (c.visual?.avoid || []).filter(x => x && x.to > x.from) }; }
-    return { clips, music: mi, musicUrl: S.assets.find(x => x.id === sel.music).url };
+    for (const id of sel.clips) { const a = S.assets.find(x => x.id === id), c = S.clipA[id] || {}, v = c.visual || {};
+      clips[id] = { filename: a.filename, url: a.url, duration: +(c.duration || a.duration), cuts: c.cuts || [], avoid: (v.avoid || []).filter(x => x && x.to > x.from),
+        usable: usableOf(c), weakStart: v.weakStartReason || "", weakEnd: v.weakEndReason || "", room: v.room || v.roomType || "", category: v.category || "" }; }
+    return { clips, music: mi, style, musicUrl: S.assets.find(x => x.id === sel.music).url };
   }
   async function runDirector(regen) {
     const sel = selection(), style = styleNow(), sig = sigOf(sel);
@@ -664,16 +775,16 @@ Return JSON only:
     try {
       await ensureClipAnalysis(sel.clips, false);
       const mdoc = await ensureMusicAnalysis(sel.music, false);
-      const mi = musicIndex(mdoc.map), ctx = ctxFor(sel, mi);
+      const mi = musicIndex(mdoc.map), ctx = ctxFor(sel, mi, style);
       const prev = previousSummary(sig, style);
       if (regen && !prev.length) log("Kein vorheriger Plan für diese Auswahl, erstelle den ersten.", "warn");
-      const prompt = directorPrompt(sel, style, mi, prev);
+      const prompt = directorPrompt(sel, style, mi, prev, S.assets.find(a => a.id === sel.music)?.filename || "music");
       log(`Director plant (${style}${prev.length ? `, ${prev.length} frühere Pläne als Abgrenzung` : ""}) …`);
       let plan = await S.sample.json(prompt, { modelTier: "complex", cache: false });
       let v = validatePlan(plan, ctx);
       if (v.errors.length) {
         log(`Validator: ${v.errors.length} Fehler, Director korrigiert …`, "warn");
-        const fix = `${prompt}\n\nYOUR PREVIOUS ANSWER:\n${JSON.stringify(plan)}\n\nTHE VALIDATOR FOUND THESE ERRORS:\n- ${v.errors.join("\n- ")}\n\nReturn the complete corrected plan JSON. Keep your concept and creative intent; change only what the errors require.`;
+        const fix = `${prompt}\n\nYOUR PREVIOUS ANSWER:\n${JSON.stringify(plan)}\n\nTHE VALIDATOR FOUND THESE ERRORS:\n- ${v.errors.join("\n- ")}${v.warnings.length ? `\n\nAND THESE HINTS (fix them too where it improves the film):\n- ${v.warnings.join("\n- ")}` : ""}\n\nReturn the complete corrected plan JSON. Keep your concept and creative intent; change only what the errors require.`;
         plan = await S.sample.json(fix, { modelTier: "complex", cache: false });
         v = validatePlan(plan, ctx);
       }
@@ -682,7 +793,11 @@ Return JSON only:
       const id = "p" + Date.now();
       const doc = { createdAt: new Date().toISOString(), number, style, signature: sig, selection: sel, regen: !!regen,
         plan, validation: { errors: v.errors, warnings: v.warnings, info: v.info, total: v.total, music: v.music,
-          shots: v.shots.map(s => ({ n: s.n, clip: s.clip, filename: s.filename, sourceIn: s.sourceIn, sourceOut: s.sourceOut, start: s.start, end: s.end, length: s.length, speed: s.speed, transitionIn: s.transitionIn, transitionDuration: s.transitionDuration, fadeOut: s.fadeOut || 0, role: s.role, reason: s.reason })) },
+          shots: v.shots.map(s => ({ n: s.n, clip: s.clip, filename: s.filename, sourceIn: s.sourceIn, sourceOut: s.sourceOut, start: s.start, end: s.end, length: s.length, speed: s.speed, transitionIn: s.transitionIn, transitionDuration: s.transitionDuration, fadeOut: s.fadeOut || 0, role: s.role, reason: s.reason, transitionReason: s.transitionReason || "", reuseReason: s.reuseReason || "" })),
+          clips: sel.clips.map(id => { const c = S.clipA[id] || {}, vv = c.visual || {}, dp = (plan.clips || []).find(x => x.clip === id) || {};
+            return { clip: id, filename: S.assets.find(a => a.id === id)?.filename, room: vv.room || "", roomType: vv.roomType || "", category: vv.category || "", importance: dp.importance ?? vv.importance ?? null,
+              usable: usableOf(c), strongest: vv.strongestStart != null ? [vv.strongestStart, vv.strongestEnd] : null, weakStartReason: vv.weakStartReason || "", weakEndReason: vv.weakEndReason || "",
+              recommendedUsage: vv.recommendedUsage || "", plannedUsage: dp.plannedUsage || "", weaknesses: vv.weaknesses || [] }; }) },
         edit, render: null };
       await S.db.collection("plans").doc(id).set(doc);
       S.current = id; showPlan({ id, ...doc });
@@ -701,9 +816,9 @@ Return JSON only:
 
   // ---------- plan view ----------
   const roleColor = r => { const s = (r || "").toLowerCase();
-    if (/hero|reveal/.test(s)) return "var(--r-hero)"; if (/montage|burst|rapid|beat/.test(s)) return "var(--r-montage)";
-    if (/build|intro|open|establish/.test(s)) return "var(--r-build)"; if (/breath|calm|break|pause|hold/.test(s)) return "var(--r-breath)";
-    if (/outro|end|close|land/.test(s)) return "var(--r-outro)"; return "var(--r-other)"; };
+    if (/hero|reveal/.test(s)) return "var(--r-hero)"; if (/montage|burst|rapid|beat|insert|detail/.test(s)) return "var(--r-montage)";
+    if (/build|intro|open|hook|establish/.test(s)) return "var(--r-build)"; if (/breath|calm|break|pause|hold/.test(s)) return "var(--r-breath)";
+    if (/outro|final|end|close|land/.test(s)) return "var(--r-outro)"; return "var(--r-other)"; };
   function renderPlanList() {
     const sel = selection(), sig = sigOf(sel);
     const ps = S.plans.filter(p => p.signature === sig);
@@ -724,10 +839,17 @@ Return JSON only:
       acc += g.trackEnd - g.trackStart; if (i < segs.length - 1) parts.push(`<span class="tl-seam" style="left:${acc / T * 100}%" title="Musikschnitt"></span>`); });
     for (const s of v.shots || []) parts.push(`<span class="tl-shot" style="left:${s.start / T * 100}%;width:${s.length / T * 100}%;background:${roleColor(s.role)}" title="${esc(`${s.n} ${s.filename} ${s.role}`)}">${s.n}</span>`);
     tl.innerHTML = parts.join("");
-    $("pv-legend").innerHTML = [["Hero/Reveal", "--r-hero"], ["Montage", "--r-montage"], ["Build/Intro", "--r-build"], ["Breath", "--r-breath"], ["Outro", "--r-outro"], ["Andere", "--r-other"]].map(([l, c]) => `<span><i style="background:var(${c})"></i>${l}</span>`).join("") + `<span><i style="background:var(--accent);width:3px"></i>Sektion/Drop</span><span><i style="border-left:2px dashed var(--ink);width:0"></i>Musikschnitt</span>`;
+    $("pv-legend").innerHTML = [["Hero", "--r-hero"], ["Burst/Insert", "--r-montage"], ["Opening/Establishing", "--r-build"], ["Breath", "--r-breath"], ["Finale", "--r-outro"], ["Secondary/andere", "--r-other"]].map(([l, c]) => `<span><i style="background:var(${c})"></i>${l}</span>`).join("") + `<span><i style="background:var(--accent);width:3px"></i>Sektion/Drop</span>` + (segs.length > 1 ? `<span><i style="border-left:2px dashed var(--ink);width:0"></i>Musikschnitt (alter Plan)</span>` : "");
     $("pv-issues").innerHTML = [...(v.errors || []).map(x => `<li class="e">Fehler: ${esc(x)}</li>`), ...(v.warnings || []).map(x => `<li class="w">Hinweis: ${esc(x)}</li>`), ...(v.info || []).map(x => `<li class="muted">${esc(x)}</li>`)].join("");
-    $("pv-shots").innerHTML = (v.shots || []).map(s => `<tr><td class="mono">${s.n}</td><td>${esc(s.filename || s.clip)}</td><td class="mono">${s.sourceIn.toFixed(2)}s</td><td class="mono">${s.sourceOut.toFixed(2)}s</td><td class="mono">${tc(s.start)}</td><td class="mono">${tc(s.end)}</td><td class="mono">${esc(speedLabel(s.speed))}</td><td class="small">${esc(s.transitionIn === "cut" ? "Cut" : `${s.transitionIn} ${s.transitionDuration}s`)}${s.fadeOut ? ` · fadeOut ${s.fadeOut}s` : ""}</td><td><span class="role" style="background:${roleColor(s.role)}">${esc(s.role || "–")}</span></td><td class="reason small">${esc(s.reason || "")}</td></tr>`).join("");
-    $("pv-music-edit").textContent = segs.length ? "Musik: " + segs.map((g, i) => `Segment ${i + 1}: Track ${g.trackStart.toFixed(2)}–${g.trackEnd.toFixed(2)}s`).join(" · ") + ` · Fade-in ${v.music.fadeIn}s, Fade-out ${v.music.fadeOut}s · Timecode mm:ss:frames bei 24 fps` : "";
+    $("pv-shots").innerHTML = (v.shots || []).map(s => `<tr><td class="mono">${s.n}</td><td>${esc(s.filename || s.clip)}</td><td class="mono">${s.sourceIn.toFixed(2)}s</td><td class="mono">${s.sourceOut.toFixed(2)}s</td><td class="mono">${tc(s.start)}</td><td class="mono">${tc(s.end)}</td><td class="mono">${esc(speedLabel(s.speed))}</td><td class="small">${esc(s.transitionIn === "cut" ? "Cut" : `${s.transitionIn} ${s.transitionDuration}s`)}${s.fadeOut ? ` · fadeOut ${s.fadeOut}s` : ""}${s.transitionReason ? `<div class="muted">${esc(s.transitionReason)}</div>` : ""}</td><td><span class="role" style="background:${roleColor(s.role)}">${esc(s.role || "–")}</span></td><td class="reason small">${esc(s.reason || "")}${s.reuseReason ? `<div class="muted">Mehrfachnutzung: ${esc(s.reuseReason)}</div>` : ""}</td></tr>`).join("");
+    const rng = r => r && r[0] != null && r[1] != null ? `${(+r[0]).toFixed(2)}–${(+r[1]).toFixed(2)}s` : "–";
+    $("pv-cliptable").innerHTML = (v.clips || []).map(c => { const uses = (v.shots || []).filter(x => x.clip === c.clip);
+      const weak = [c.weakStartReason && `Anfang: ${c.weakStartReason}`, c.weakEndReason && `Ende: ${c.weakEndReason}`, ...(c.weaknesses || [])].filter(Boolean);
+      return `<tr><td>${esc(c.filename || c.clip)}</td><td class="small">${esc(c.room || c.roomType || "–")}${c.category ? `<div class="muted">${esc(c.roomType)} · ${esc(c.category)}</div>` : ""}</td><td class="mono">${c.importance ?? "–"}</td><td class="mono">${rng(c.usable)}</td><td class="mono">${rng(c.strongest)}</td><td class="small">${esc(c.recommendedUsage || "–")}${c.plannedUsage ? `<div class="muted">Plan: ${esc(c.plannedUsage)}</div>` : ""}</td><td class="small reason">${esc(weak.join(" · ") || "–")}</td><td class="small mono">${uses.length ? uses.map(x => `#${x.n} ${x.sourceIn.toFixed(2)}–${x.sourceOut.toFixed(2)}s`).join("<br>") : "ausgelassen"}</td></tr>`; }).join("")
+      || `<tr><td colspan="8" class="muted small">Für diesen Plan liegt keine erweiterte Clip-Analyse vor (älterer Plan).</td></tr>`;
+    const mname = S.assets.find(a => a.id === p.selection?.music)?.filename || "–", mu = v.music || {};
+    $("pv-music-pick").innerHTML = mu.start != null ? `<div><dt>Musiktrack</dt><dd>${esc(mname)}</dd></div><div><dt>Musik-Start</dt><dd class="mono">${mu.start.toFixed(2)}s</dd></div><div><dt>Musik-Ende</dt><dd class="mono">${mu.end.toFixed(2)}s</dd></div><div><dt>Am Stück</dt><dd>${(mu.end - mu.start).toFixed(2)}s, ohne Schnitt</dd></div>${mu.reason ? `<div class="why"><dt>Warum dieser Start</dt><dd>${esc(mu.reason)}</dd></div>` : ""}` : "";
+    $("pv-music-edit").textContent = segs.length === 1 ? `Musik läuft durchgehend von ${segs[0].trackStart.toFixed(2)}s bis ${segs[0].trackEnd.toFixed(2)}s im Track · Fade-in ${v.music.fadeIn}s, Fade-out ${v.music.fadeOut}s · Timecode mm:ss:frames bei 24 fps` : segs.length ? "Musik (alter Plan mit Musikschnitten): " + segs.map((g, i) => `Segment ${i + 1}: Track ${g.trackStart.toFixed(2)}–${g.trackEnd.toFixed(2)}s`).join(" · ") + ` · Fade-in ${v.music.fadeIn}s, Fade-out ${v.music.fadeOut}s · Timecode mm:ss:frames bei 24 fps` : "";
     $("pv-omitted").textContent = (pl.omitted || []).length ? "Ausgelassen: " + pl.omitted.map(o => `${S.assets.find(a => a.id === o.clip)?.filename || o.clip} (${o.reason})`).join(" · ") : "";
     renderPlanList(); showRender(p);
     if (!quiet) $("plan-view").scrollIntoView({ behavior: "smooth", block: "start" });
