@@ -375,8 +375,15 @@ function buildEdit(v, ctx) {
   // back-to-back clips on the main track chain with "auto" (avoids float overlap errors in Studio)
   for (let i = 1; i < main.length; i++) { const p = main[i - 1]; const pEnd = (p._s ?? p.start) + p.length; main[i]._s = main[i].start; if (Math.abs(pEnd - main[i].start) < 1e-3) main[i].start = "auto"; }
   main.forEach(c => delete c._s);
-  const tracks = [];
-  if (overlay.length) tracks.push({ clips: overlay });
+  // dissolve shots that overlap in time (back-to-back dissolves) need their own layer:
+  // each one sits one layer above every overlay clip it overlaps, so the later shot fades in on top
+  const layers = [], placed = [];
+  for (const c of overlay) {
+    const end = c.start + c.length;
+    const lvl = placed.filter(o => o.c.start < end + 1e-3 && c.start < o.c.start + o.c.length + 1e-3).reduce((m, o) => Math.max(m, o.lvl + 1), 0);
+    placed.push({ c, lvl }); (layers[lvl] = layers[lvl] || []).push(c);
+  }
+  const tracks = layers.reverse().map(clips => ({ clips }));
   tracks.push({ clips: main });
   let off = 0; const segs = v.music.segments;
   segs.forEach((g, i) => {
