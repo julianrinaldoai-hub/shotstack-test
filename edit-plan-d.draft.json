@@ -7,7 +7,7 @@
           {
             "asset": {
               "type": "video",
-              "src": "{{C1_URL}}",
+              "src": "{{C2_URL}}",
               "trim": 0.0,
               "volume": 0,
               "speed": 0.65
@@ -15,6 +15,14 @@
             "start": 0.0,
             "length": 3.25,
             "fit": "crop",
+            "scale": [
+              {
+                "from": 1.0,
+                "to": 1.04,
+                "start": 0,
+                "length": 3.25
+              }
+            ],
             "opacity": [
               {
                 "from": 0,
@@ -71,8 +79,8 @@
           {
             "asset": {
               "type": "video",
-              "src": "{{C6_URL}}",
-              "trim": 0.1,
+              "src": "{{C7_URL}}",
+              "trim": 0.0,
               "volume": 0
             },
             "start": "auto",
@@ -104,8 +112,8 @@
           {
             "asset": {
               "type": "video",
-              "src": "{{C11_URL}}",
-              "trim": 0.0,
+              "src": "{{C3_URL}}",
+              "trim": 1.0,
               "volume": 0
             },
             "start": "auto",
@@ -115,8 +123,8 @@
           {
             "asset": {
               "type": "video",
-              "src": "{{C7_URL}}",
-              "trim": 0.85,
+              "src": "{{C1_URL}}",
+              "trim": 0.0,
               "volume": 0,
               "speed": [
                 {
@@ -136,8 +144,8 @@
           {
             "asset": {
               "type": "video",
-              "src": "{{C1_URL}}",
-              "trim": 2.15,
+              "src": "{{C7_URL}}",
+              "trim": 2.2,
               "volume": 0,
               "speed": 0.72
             },
@@ -148,10 +156,9 @@
           {
             "asset": {
               "type": "video",
-              "src": "{{C9_URL}}",
-              "trim": 3.3,
-              "volume": 0,
-              "speed": 0.93
+              "src": "{{C2_URL}}",
+              "trim": 2.4,
+              "volume": 0
             },
             "start": "auto",
             "length": 0.7916,
@@ -202,8 +209,8 @@
           {
             "asset": {
               "type": "video",
-              "src": "{{C8_URL}}",
-              "trim": 2.0,
+              "src": "{{C9_URL}}",
+              "trim": 2.45,
               "volume": 0
             },
             "start": "auto",
@@ -224,10 +231,9 @@
           {
             "asset": {
               "type": "video",
-              "src": "{{C4_URL}}",
-              "trim": 3.44,
-              "volume": 0,
-              "speed": 0.75
+              "src": "{{C1_URL}}",
+              "trim": 2.85,
+              "volume": 0
             },
             "start": "auto",
             "length": 0.7917,
