@@ -1,6 +1,6 @@
 # Version 4 — heutige Assets (14.10.2026), Edit-Logik von Version 3
 
-**Status:** VORSCHLAG, wartet auf Freigabe. Keine Shotstack-Edit erstellt, nichts gerendert.
+**Status:** Freigegeben, gebaut und im Shotstack Studio geöffnet. **Nicht gerendert.** Dateien: `edit-plan-d.draft.json` (Platzhalter, committed), `edit-plan-d.stage.json` (echte Links, git-ignoriert), Builder `tools/build_v4.py`.
 **Assets:** ausschließlich die 12 Uploads vom 14.10.2026 im Shotstack-Sandbox (stage): 11 Clips + 1 Musiktitel. Alle älteren Assets werden ignoriert.
 
 ## 1. Heutige Assets

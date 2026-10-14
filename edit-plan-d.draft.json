@@ -1,0 +1,364 @@
+{
+  "timeline": {
+    "background": "#000000",
+    "tracks": [
+      {
+        "clips": [
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C2_URL}}",
+              "trim": 0.0,
+              "volume": 0,
+              "speed": 0.65
+            },
+            "start": 0.0,
+            "length": 3.25,
+            "fit": "crop",
+            "scale": [
+              {
+                "from": 1.0,
+                "to": 1.04,
+                "start": 0,
+                "length": 3.25
+              }
+            ],
+            "opacity": [
+              {
+                "from": 0,
+                "to": 1,
+                "start": 0,
+                "length": 1.0,
+                "interpolation": "bezier",
+                "easing": "easeOut"
+              }
+            ]
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C4_URL}}",
+              "trim": 0.0,
+              "volume": 0,
+              "speed": [
+                {
+                  "from": 0.9,
+                  "to": 1.6,
+                  "start": 1.4,
+                  "length": 1.84,
+                  "interpolation": "bezier",
+                  "easing": "easeIn"
+                }
+              ]
+            },
+            "start": "auto",
+            "length": 3.25,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C9_URL}}",
+              "trim": 0.0,
+              "volume": 0,
+              "speed": [
+                {
+                  "from": 1.4,
+                  "to": 0.6,
+                  "start": 0.0,
+                  "length": 1.3,
+                  "interpolation": "bezier",
+                  "easing": "easeOut"
+                }
+              ]
+            },
+            "start": "auto",
+            "length": 3.25,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C7_URL}}",
+              "trim": 0.0,
+              "volume": 0
+            },
+            "start": "auto",
+            "length": 0.7917,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C8_URL}}",
+              "trim": 0.6,
+              "volume": 0
+            },
+            "start": "auto",
+            "length": 0.7916,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C10_URL}}",
+              "trim": 0.3,
+              "volume": 0
+            },
+            "start": "auto",
+            "length": 0.8334,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C3_URL}}",
+              "trim": 1.0,
+              "volume": 0
+            },
+            "start": "auto",
+            "length": 0.7916,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C1_URL}}",
+              "trim": 0.0,
+              "volume": 0,
+              "speed": [
+                {
+                  "from": 0.7,
+                  "to": 1.5,
+                  "start": 1.6,
+                  "length": 1.64,
+                  "interpolation": "bezier",
+                  "easing": "easeIn"
+                }
+              ]
+            },
+            "start": "auto",
+            "length": 3.25,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C7_URL}}",
+              "trim": 2.2,
+              "volume": 0,
+              "speed": 0.72
+            },
+            "start": "auto",
+            "length": 0.8334,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C2_URL}}",
+              "trim": 2.4,
+              "volume": 0
+            },
+            "start": "auto",
+            "length": 0.7916,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C11_URL}}",
+              "trim": 1.5,
+              "volume": 0,
+              "speed": [
+                {
+                  "from": 1.3,
+                  "to": 0.7,
+                  "start": 0.0,
+                  "length": 1.62,
+                  "interpolation": "bezier",
+                  "easing": "easeOut"
+                }
+              ]
+            },
+            "start": "auto",
+            "length": 1.625,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C6_URL}}",
+              "trim": 1.0,
+              "volume": 0,
+              "speed": [
+                {
+                  "from": 0.75,
+                  "to": 1.7,
+                  "start": 1.6,
+                  "length": 1.64,
+                  "interpolation": "bezier",
+                  "easing": "easeIn"
+                }
+              ]
+            },
+            "start": "auto",
+            "length": 3.25,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C9_URL}}",
+              "trim": 2.45,
+              "volume": 0
+            },
+            "start": "auto",
+            "length": 0.7917,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C10_URL}}",
+              "trim": 2.0,
+              "volume": 0
+            },
+            "start": "auto",
+            "length": 0.8333,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C1_URL}}",
+              "trim": 2.85,
+              "volume": 0
+            },
+            "start": "auto",
+            "length": 0.7917,
+            "fit": "crop"
+          },
+          {
+            "asset": {
+              "type": "video",
+              "src": "{{C5_URL}}",
+              "trim": 0.0,
+              "volume": 0,
+              "speed": [
+                {
+                  "from": 1.4,
+                  "to": 0.55,
+                  "start": 0.0,
+                  "length": 1.8,
+                  "interpolation": "bezier",
+                  "easing": "easeOut"
+                }
+              ]
+            },
+            "start": "auto",
+            "length": 5.875,
+            "fit": "crop",
+            "opacity": [
+              {
+                "from": 1,
+                "to": 0,
+                "start": 3.875,
+                "length": 1.4,
+                "interpolation": "bezier",
+                "easing": "easeInOut"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "clips": [
+          {
+            "asset": {
+              "type": "audio",
+              "src": "{{MUSIC_URL}}",
+              "trim": 20.179,
+              "volume": [
+                {
+                  "from": 0,
+                  "to": 1,
+                  "start": 0,
+                  "length": 0.6
+                },
+                {
+                  "from": 1,
+                  "to": 0,
+                  "start": 19.4295,
+                  "length": 0.03
+                }
+              ]
+            },
+            "start": 0.0,
+            "length": 19.4595
+          }
+        ]
+      },
+      {
+        "clips": [
+          {
+            "asset": {
+              "type": "audio",
+              "src": "{{MUSIC_URL}}",
+              "trim": 52.612,
+              "volume": [
+                {
+                  "from": 0,
+                  "to": 1,
+                  "start": 0,
+                  "length": 0.02
+                },
+                {
+                  "from": 1,
+                  "to": 0,
+                  "start": 6.4565,
+                  "length": 0.03
+                }
+              ]
+            },
+            "start": 19.4595,
+            "length": 6.4865
+          }
+        ]
+      },
+      {
+        "clips": [
+          {
+            "asset": {
+              "type": "audio",
+              "src": "{{MUSIC_URL}}",
+              "trim": 107.747,
+              "volume": [
+                {
+                  "from": 0,
+                  "to": 1,
+                  "start": 0,
+                  "length": 0.02
+                },
+                {
+                  "from": 1,
+                  "to": 0,
+                  "start": 4.553,
+                  "length": 0.5
+                }
+              ]
+            },
+            "start": 25.9459,
+            "length": 5.053
+          }
+        ]
+      }
+    ]
+  },
+  "output": {
+    "format": "mp4",
+    "resolution": "hd",
+    "aspectRatio": "16:9",
+    "fps": 24
+  }
+}
