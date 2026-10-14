@@ -57,3 +57,32 @@ Gleiche Slots, Schnittzeiten und Speed-Ramps wie Version 3. Nur die Inhalte sind
 **Grund für den Abschluss:** Es gibt keine Außenaufnahme. Deshalb landet das Ende auf C5, dem stärksten Seeblick-Clip, der dafür aufgespart wird. Die Fahrt nach links verlangsamt sich zum Schweben, dann folgt der Fade.
 
 **Endgültige Quellbereiche:** werden im Builder mit den exakten Easing-Kurven von Studio nachgerechnet, wie bei Version 3.
+
+## 4. Fehlerkorrektur nach Bildprüfung (QC)
+
+Alle verwendeten Abschnitte wurden in voller Auflösung Bild für Bild geprüft. Entfernt wurden:
+
+| Clip | Fehler | Maßnahme |
+|---|---|---|
+| **C3** Fitness/Spa | Fitnessgeräte ineinander verschmolzen: zwei Konsolen auf einem Rahmen, schwebende Scheibe | Komplett entfernt (vorher #4d) |
+| **C2** Bar | Barhocker als deformierter Stapel aus Holzlamellen, der in den Tresen übergeht | Komplett entfernt (vorher #1 und #6b) |
+| **C1** ab 2,8s | Ringleuchte zerläuft, verformte Spiegelung in der Glasfläche | Nur noch 0–2,75s verwendet; der Builder sperrt alles ab 2,80s (vorher #8c) |
+
+Neue Belegung (Schnittzeiten und Speed-Ramps unverändert):
+
+| # | Vorher | Jetzt |
+|---|---|---|
+| 1 | C2 Bar | **C1** Wohnbereich mit Ringleuchte und Pampasgras (0,00–2,11) |
+| 4a | C7 Steinbad | **C6** helles Marmorbad (0,10–0,89) |
+| 4d | C3 Fitness | **C11** dunkles Schlafzimmer mit Wanne (0,00–0,79) |
+| 5 | C1 Wohnbereich | **C7** Steinbad als Hero 2 (0,85–3,62) |
+| 6a | C7 Duschwand | **C1** Pampasgras/Sofa (2,15–2,75 bei 0,72×) |
+| 6b | C2 Bar | **C9** Ringleuchte nah (3,30–4,04 bei 0,93×) |
+| 8a | C9 Ringleuchte | **C8** Kleiderschrank (2,00–2,79) |
+| 8c | C1 Ende | **C4** Marmorinsel nah (3,44–4,03 bei 0,75×) |
+
+Damit werden 9 der 11 heutigen Clips verwendet. C2 und C3 sind wegen der Fehler bewusst ausgeschlossen.
+
+Grenzwertig, aber belassen:
+- **C9:** schwarzer senkrechter Stab von der Decke bis in die Theke; wirkt wie eine Stahlstütze.
+- **C4:** Esszimmerstühle leicht ineinander geschoben; während der beschleunigten Fahrt kaum sichtbar.

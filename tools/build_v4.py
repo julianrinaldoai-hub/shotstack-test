@@ -95,31 +95,32 @@ def shot(n, key, start, end, trim, speed=1.0, **extra):
 S = {"C%d" % i: "C%d_URL" % i for i in range(1, 12)}
 FADE_OUT_AT = 29.0               # outro swell (track 110.79) -> picture fades to black
 C10_CUT = 1.833                  # hard cut inside C10: shot A ends before it, shot B starts after it
-MAX_END = {"10a": C10_CUT - 0.04}
+# Excluded after QC: C2 (deformed bar stools), C3 (deformed gym machines), C1 after 2.8s (ring light glitch)
+C1_GLITCH = 2.80
+MAX_END = {"10a": C10_CUT - 0.04, "1": C1_GLITCH, "6a": C1_GLITCH}
 MIN_TRIM = {"10b": C10_CUT + 0.04}
 
 shots = [
     # BUILD
-    shot("1", S["C2"], vt(7), vt(8), 0.00, 0.65,                                              # static bar: slow push
-         scale=[{"from": 1.0, "to": 1.04, "start": 0, "length": 3.25}],
+    shot("1", S["C1"], vt(7), vt(8), 0.00, 0.65,                                              # ring light + pampas
          opacity=[{"from": 0, "to": 1, "start": 0, "length": 1.0, "interpolation": "bezier", "easing": "easeOut"}]),
     shot("2", S["C4"], vt(8), vt(9), 0.00, [ramp(0.9, 1.6, 1.40, 1.84, "easeIn")]),          # R1 into lift 1
     # WAVE 1
     shot("3", S["C9"], vt(9), vt(10), 0.00, [ramp(1.4, 0.6, 0.0, 1.30, "easeOut")]),         # R2 hero 1
-    shot("4a", S["C7"], vt(10, 0), vt(10, 1), 0.00),                                          # MONTAGE A
+    shot("4a", S["C6"], vt(10, 0), vt(10, 1), 0.10),                                          # MONTAGE A
     shot("4b", S["C8"], vt(10, 1), vt(10, 2), 0.60),
     shot("10a", S["C10"], vt(10, 2), vt(10, 3), 0.30),
-    shot("4d", S["C3"], vt(10, 3), vt(11), 1.00),
-    shot("5", S["C1"], vt(11), vt(12), 0.00, [ramp(0.7, 1.5, 1.60, 1.64, "easeIn")]),        # R3 hero 2
-    shot("6a", S["C7"], vt(12, 0), vt(12, 1), 2.20, 0.72),                                    # MONTAGE B
-    shot("6b", S["C2"], vt(12, 1), vt(12, 2), 2.40),
+    shot("4d", S["C11"], vt(10, 3), vt(11), 0.00),                                       # was C3 (deformed gym machines)
+    shot("5", S["C7"], vt(11), vt(12), 0.85, [ramp(0.7, 1.5, 1.60, 1.64, "easeIn")]),        # R3 hero 2: stone bath
+    shot("6a", S["C1"], vt(12, 0), vt(12, 1), 2.15, 0.72),                                    # MONTAGE B
+    shot("6b", S["C9"], vt(12, 1), vt(12, 2), 3.30, 0.93),                               # was C2 (deformed bar stools)
     shot("6c", S["C11"], vt(12, 2), vt(17), 1.50, [ramp(1.3, 0.7, 0.0, 1.62, "easeOut")]),    # R4 brake
     # BREAKDOWN
     shot("7", S["C6"], vt(17), vt(18), 1.00, [ramp(0.75, 1.7, 1.60, 1.64, "easeIn")]),       # R5 into lift 2
     # WAVE 2 - MONTAGE C
-    shot("8a", S["C9"], vt(18, 0), vt(18, 1), 2.45),
+    shot("8a", S["C8"], vt(18, 0), vt(18, 1), 2.00),
     shot("10b", S["C10"], vt(18, 1), vt(18, 2), 2.00),
-    shot("8c", S["C1"], vt(18, 2), vt(18, 3), 2.85),
+    shot("8c", S["C4"], vt(18, 2), vt(18, 3), 3.44, 0.75),                               # was C1 tail (ring light glitch)
     # OUTRO
     shot("9", S["C5"], vt(18, 3), END, 0.00, [ramp(1.4, 0.55, 0.0, 1.80, "easeOut")]),       # R6 landing
 ]
