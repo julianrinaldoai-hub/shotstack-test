@@ -1,0 +1,797 @@
+<title>Director Testcenter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: an edit-suite worksheet. One column of four stations (Assets, Style, Plan, Render) with a timecode rail on the left of each station. */
+:root {
+  --bg: #eef0f2; --panel: #ffffff; --ink: #15181c; --muted: #5b636d; --line: #d6dbe0;
+  --accent: #b4540a; --accent-ink: #ffffff; --accent-soft: #f6e6d8;
+  --ok: #1f7a4d; --warn: #8a6100; --bad: #b42318; --info: #2b5c8a;
+  --r-hero: #b4540a; --r-montage: #2b5c8a; --r-build: #6c7a89; --r-breath: #7d9b8a; --r-outro: #8b6f9e; --r-other: #9aa3ad;
+  --f-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", Roboto, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111316; --panel: #191c20; --ink: #e6e8eb; --muted: #9aa3ad; --line: #2a2f35;
+  --accent: #e8893a; --accent-ink: #1a1206; --accent-soft: #3a2614;
+  --ok: #4cc38a; --warn: #e0b04a; --bad: #f07167; --info: #7fb0e0;
+  --r-hero: #e8893a; --r-montage: #6aa0d6; --r-build: #8794a3; --r-breath: #8fb5a0; --r-outro: #b195c4; --r-other: #6b7480;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111316; --panel: #191c20; --ink: #e6e8eb; --muted: #9aa3ad; --line: #2a2f35;
+  --accent: #e8893a; --accent-ink: #1a1206; --accent-soft: #3a2614;
+  --ok: #4cc38a; --warn: #e0b04a; --bad: #f07167; --info: #7fb0e0;
+  --r-hero: #e8893a; --r-montage: #6aa0d6; --r-build: #8794a3; --r-breath: #8fb5a0; --r-outro: #b195c4; --r-other: #6b7480;
+  color-scheme: dark }
+
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 18px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 1.6rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.12rem; }
+h3 { font-size: 0.95rem; }
+.mono, td.mono, .tc { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+header.top { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; justify-content: space-between; }
+.envline { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.78rem; background: var(--panel); white-space: nowrap; }
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.chip.ok .dot { background: var(--ok); } .chip.bad .dot { background: var(--bad); } .chip.warn .dot { background: var(--warn); }
+
+section.station { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; display: grid; grid-template-columns: 54px minmax(0, 1fr); overflow: hidden; }
+.rail { border-right: 1px solid var(--line); padding: 14px 0; text-align: center; font-family: var(--f-mono); color: var(--muted); font-size: 0.72rem; letter-spacing: 0.06em; }
+.rail b { display: block; font-size: 1.1rem; color: var(--ink); font-family: var(--f-display); letter-spacing: 0; }
+.body { padding: 14px 18px 18px; display: grid; gap: 12px; min-width: 0; }
+.head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+@media (max-width: 560px) { section.station { grid-template-columns: minmax(0, 1fr); } .rail { border-right: 0; border-bottom: 1px solid var(--line); padding: 6px 12px; text-align: left; } .rail b { display: inline; margin-right: 6px; } }
+
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--f-display); font-weight: 500; font-size: 0.74rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); background: color-mix(in srgb, var(--panel) 85%, var(--bg)); position: sticky; top: 0; }
+tr:last-child td { border-bottom: 0; }
+tr.old td { color: var(--muted); }
+tr.groupline td { background: color-mix(in srgb, var(--panel) 80%, var(--bg)); font-family: var(--f-display); font-size: 0.78rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button { font: 600 0.9rem var(--f-body); padding: 8px 14px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, label.style:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; text-decoration: underline; }
+label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 0.9rem; }
+
+.styles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+label.style { position: relative; border: 1px solid var(--line); border-radius: 9px; padding: 11px 13px; display: grid; gap: 3px; cursor: pointer; }
+label.style input { position: absolute; opacity: 0; pointer-events: none; }
+label.style:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+label.style b { font-family: var(--f-display); letter-spacing: 0.08em; font-size: 0.85rem; }
+
+.log { font-family: var(--f-mono); font-size: 0.78rem; background: color-mix(in srgb, var(--panel) 70%, var(--bg)); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-height: 190px; overflow: auto; white-space: pre-wrap; }
+.notice { border: 1px solid var(--line); border-left: 4px solid var(--info); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; }
+.notice.bad { border-left-color: var(--bad); } .notice.warn { border-left-color: var(--warn); } .notice.ok { border-left-color: var(--ok); }
+
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.summary > div { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.summary p { margin: 4px 0 0; font-size: 0.9rem; }
+.concept { font-family: var(--f-display); font-size: 1.05rem; }
+
+.timeline { position: relative; height: 64px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: color-mix(in srgb, var(--panel) 75%, var(--bg)); }
+.tl-shot { position: absolute; top: 8px; height: 30px; border-radius: 3px; color: var(--panel); font: 600 0.68rem var(--f-mono); padding: 2px 4px; overflow: hidden; white-space: nowrap; border-right: 1px solid var(--panel); }
+.tl-bar { position: absolute; bottom: 0; width: 1px; height: 14px; background: var(--line); }
+.tl-bar.sec { background: var(--accent); height: 22px; width: 2px; }
+.tl-seam { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed var(--ink); opacity: 0.5; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.78rem; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.role { display: inline-block; padding: 1px 7px; border-radius: 4px; color: var(--panel); font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
+td.reason { min-width: 220px; max-width: 360px; }
+.issues li { margin: 2px 0; }
+.issues .e { color: var(--bad); } .issues .w { color: var(--warn); }
+
+.plans { display: flex; flex-wrap: wrap; gap: 6px; }
+.plans button { padding: 4px 10px; font-size: 0.8rem; }
+.plans button.cur { border-color: var(--accent); color: var(--accent); }
+
+.steps { display: flex; flex-wrap: wrap; gap: 6px; }
+.step { padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line); font: 600 0.78rem var(--f-mono); color: var(--muted); }
+.step.on { border-color: var(--accent); color: var(--accent); }
+.step.done { border-color: var(--ok); color: var(--ok); }
+.step.fail { border-color: var(--bad); color: var(--bad); }
+.confirm { border: 1px solid var(--accent); border-radius: 9px; padding: 12px 14px; display: grid; gap: 10px; background: var(--accent-soft); }
+video { width: 100%; max-width: 100%; border-radius: 8px; background: #000; aspect-ratio: 16 / 9; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 0.88rem; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Director Testcenter</h1>
+      <div class="muted small">Immobilien-Clips + Musik → Claude plant den Schnitt → Shotstack rendert. Isolierter Test, keine Produktion.</div>
+    </div>
+    <div class="envline" id="caps">
+      <span class="chip" id="cap-db"><span class="dot"></span>Speicher</span>
+      <span class="chip" id="cap-mcp"><span class="dot"></span>Shotstack</span>
+      <span class="chip" id="cap-sample"><span class="dot"></span>Claude</span>
+    </div>
+  </header>
+  <div class="notice warn" id="nocaps" hidden>Diese Seite funktioniert nur in claude.ai mit verbundenem Shotstack-Connector. Hier fehlen: <span id="nocaps-list"></span>.</div>
+
+  <section class="station" aria-labelledby="h-assets">
+    <div class="rail"><b>1</b>ASSETS</div>
+    <div class="body">
+      <div class="head">
+        <h2 id="h-assets">Assets aus Shotstack (Sandbox)</h2>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="today-only" checked> Nur heute hochgeladene</label>
+          <span class="muted small" id="asset-count"></span>
+        </div>
+      </div>
+      <div class="tablebox"><table>
+        <thead><tr><th></th><th>Datei</th><th>Typ</th><th>Dauer</th><th>Upload</th><th>Format</th><th>Asset-ID</th></tr></thead>
+        <tbody id="asset-rows"><tr><td colspan="7" class="muted">Noch keine Assets. Neue Uploads werden synchronisiert, wenn du Claude im Chat „sync“ schreibst.</td></tr></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section class="station" aria-labelledby="h-style">
+    <div class="rail"><b>2</b>STYLE</div>
+    <div class="body">
+      <h2 id="h-style">Kreative Richtung</h2>
+      <div class="styles" role="radiogroup" aria-label="Style">
+        <label class="style"><input type="radio" name="style" id="style-elegant" value="ELEGANT" checked><b>ELEGANT</b><span class="muted small">Ruhe, Raum, Eleganz. Der Director entscheidet, was das konkret heißt.</span></label>
+        <label class="style"><input type="radio" name="style" id="style-dynamic" value="DYNAMIC"><b>DYNAMIC</b><span class="muted small">Energie, Rhythmus, Tempo. Der Director entscheidet, was das konkret heißt.</span></label>
+        <label class="style"><input type="radio" name="style" id="style-cinematic" value="CINEMATIC"><b>CINEMATIC</b><span class="muted small">Spannungsbogen, Kontrast, Wirkung. Der Director entscheidet, was das konkret heißt.</span></label>
+      </div>
+      <p class="muted small" style="margin:0">Styles sind nur kreative Richtungen, keine Vorlagen. Shot-Anzahl, Längen, Struktur und Effekte legt der Director für jedes Material neu fest.</p>
+    </div>
+  </section>
+
+  <section class="station" aria-labelledby="h-plan">
+    <div class="rail"><b>3</b>PLAN</div>
+    <div class="body">
+      <div class="head">
+        <h2 id="h-plan">Analyze &amp; Plan</h2>
+        <div class="row">
+          <button class="primary" id="btn-plan" disabled>Analyze &amp; Plan</button>
+          <button id="btn-regen" disabled>Regenerate Plan</button>
+          <button class="link" id="btn-reanalyze" disabled>Analysen neu erstellen</button>
+        </div>
+      </div>
+      <div class="muted small" id="sel-summary">Auswahl: –</div>
+      <div class="log" id="log" aria-live="polite">Bereit. Analysen von Clips und Musik werden gespeichert und bei Regenerate wiederverwendet.</div>
+      <div class="plans" id="plan-list"></div>
+      <div id="plan-view" hidden>
+        <div class="summary">
+          <div><h3>Konzept</h3><p class="concept" id="pv-concept"></p><p class="muted small" id="pv-meta"></p></div>
+          <div><h3>Spannungsbogen</h3><p id="pv-arc"></p></div>
+        </div>
+        <div class="summary" style="margin-top:12px">
+          <div><h3>Clip-Analyse</h3><p id="pv-clips"></p></div>
+          <div><h3>Musik-Analyse</h3><p id="pv-music"></p></div>
+        </div>
+        <h3 style="margin-top:14px">Timeline</h3>
+        <div class="timeline" id="pv-timeline"></div>
+        <div class="legend" id="pv-legend"></div>
+        <ul class="issues small" id="pv-issues"></ul>
+        <div class="tablebox" style="margin-top:8px"><table>
+          <thead><tr><th>#</th><th>Source Clip</th><th>Source In</th><th>Source Out</th><th>Timeline In</th><th>Timeline Out</th><th>Speed</th><th>Transition</th><th>Role</th><th>Begründung</th></tr></thead>
+          <tbody id="pv-shots"></tbody>
+        </table></div>
+        <div class="small muted" id="pv-music-edit" style="margin-top:8px"></div>
+        <div class="small muted" id="pv-omitted"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="station" aria-labelledby="h-render">
+    <div class="rail"><b>4</b>RENDER</div>
+    <div class="body">
+      <div class="head">
+        <h2 id="h-render">Render</h2>
+        <div class="row">
+          <button id="btn-studio" disabled>Im Studio öffnen</button>
+          <button class="primary" id="btn-render" disabled>Render</button>
+        </div>
+      </div>
+      <div class="confirm" id="confirm" hidden>
+        <div><b>Render starten?</b></div>
+        <div class="small" id="confirm-text"></div>
+        <div class="row"><button class="primary" id="btn-confirm">Ja, rendern</button><button id="btn-cancel">Abbrechen</button></div>
+      </div>
+      <div class="steps" id="steps">
+        <span class="step" data-s="preparing">preparing</span>
+        <span class="step" data-s="rendering">rendering</span>
+        <span class="step" data-s="done">done</span>
+        <span class="step" data-s="failed">failed</span>
+      </div>
+      <div id="render-msg" class="small muted">Noch kein Render für diesen Plan.</div>
+      <div id="render-result" hidden>
+        <video id="render-video" controls playsinline preload="metadata"></video>
+        <dl class="kv">
+          <dt>Render-ID</dt><dd class="mono" id="rr-id"></dd>
+          <dt>Render-URL</dt><dd class="mono"><a id="rr-url" href="#" target="_blank" rel="noopener"></a></dd>
+          <dt>Umgebung</dt><dd id="rr-env"></dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ===== CORE-BEGIN: technical rules only (no creative decisions) =====
+const FPS = 24;
+const snap = t => Math.round(t * FPS) / FPS;
+const r4 = x => Math.round(x * 10000) / 10000;
+const tc = t => { const s = Math.max(0, t), m = Math.floor(s / 60), sec = Math.floor(s % 60), fr = Math.round((s - Math.floor(s)) * FPS) % FPS;
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}:${String(fr).padStart(2, "0")}`; };
+
+// CSS easing curves as used by Shotstack Studio's CurveInterpolator
+const CURVES = { easeIn: [0.42, 0, 1, 1], easeOut: [0, 0, 0.58, 1], easeInOut: [0.42, 0, 0.58, 1] };
+function ease(name, x) {
+  const c = CURVES[name]; if (!c) return x;
+  const [x1, y1, x2, y2] = c; let lo = 0, hi = 1, t = 0.5;
+  for (let i = 0; i < 40; i++) { t = (lo + hi) / 2; const bx = 3 * (1 - t) ** 2 * t * x1 + 3 * (1 - t) * t * t * x2 + t ** 3; if (bx < x) lo = t; else hi = t; }
+  return 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t * t * y2 + t ** 3;
+}
+// speed spec: number, or [{from,to,at,over,easing}] (ramps, seconds into the shot)
+function rampsOf(spec) { return Array.isArray(spec) ? [...spec].sort((a, b) => a.at - b.at) : null; }
+function speedAt(spec, t) {
+  const rs = rampsOf(spec); if (!rs) return spec ?? 1;
+  let cur = rs[0].from;
+  for (const k of rs) { if (t < k.at) return cur; if (t <= k.at + k.over) return k.from + (k.to - k.from) * ease(k.easing, (t - k.at) / k.over); cur = k.to; }
+  return cur;
+}
+function srcUsed(spec, L, step = 0.001) {
+  if (!Array.isArray(spec)) return (spec ?? 1) * L;
+  let u = 0; const n = Math.max(1, Math.round(L / step)); const d = L / n;
+  for (let i = 0; i < n; i++) u += speedAt(spec, (i + 0.5) * d) * d;
+  return u;
+}
+function speedLabel(spec) {
+  const rs = rampsOf(spec); if (!rs) return `${(+spec || 1).toFixed(2)}×`;
+  return rs.map(k => `${k.from}→${k.to}× @${(+k.at).toFixed(2)}s/${(+k.over).toFixed(2)}s ${k.easing || "linear"}`).join(" · ");
+}
+
+// Music map from Shotstack analyse_music -> bars, sections, drops, half-bar points
+function musicIndex(map) {
+  const db = (map.downbeats && map.downbeats.length ? map.downbeats : []).filter((t, i, a) => i === 0 || t - a[i - 1] > 0.3);
+  const diffs = db.slice(1).map((t, i) => t - db[i]).sort((a, b) => a - b);
+  const barLen = map.steady && map.bar ? map.bar : (diffs.length ? diffs[Math.floor(diffs.length / 2)] : 2);
+  let downs = db;
+  if (map.steady && map.bar && map.origin != null) { downs = []; for (let t = map.origin; t < map.duration; t += map.bar) downs.push(r4(t)); }
+  const energy = (map.bars && map.bars.energy) || [];
+  const beats = map.beats || [];
+  const bars = downs.map((t, i) => {
+    const end = downs[i + 1] ?? Math.min(map.duration, t + barLen);
+    return { i, t: r4(t), end: r4(end), energy: energy[i] ?? null, onsets: beats.filter(b => b >= t - 0.02 && b < end - 0.02).length };
+  });
+  return { duration: map.duration, barLen: r4(barLen), steady: !!map.steady, bars, sections: map.sections || [], drops: map.drops || [],
+    cutPoints: [...new Set(bars.flatMap(b => [b.t, r4((b.t + b.end) / 2)]))].sort((a, b) => a - b) };
+}
+const nearest = (arr, x) => arr.reduce((best, v) => Math.abs(v - x) < Math.abs(best - x) ? v : best, arr[0] ?? x);
+
+// Validate a director plan against hard technical constraints; returns normalized shots + issues
+function validatePlan(plan, ctx) {
+  const errors = [], warnings = [], info = [];
+  const shots = (plan.shots || []).map((s, i) => ({ ...s, n: i + 1 }));
+  if (!shots.length) errors.push("Der Plan enthält keine Shots.");
+  // timeline contiguity (frame-snapped)
+  let t = 0;
+  for (const s of shots) {
+    let st = snap(+s.start), en = snap(+s.end);
+    if (Math.abs(st - t) <= 0.1) st = snap(t); else errors.push(`Shot ${s.n}: beginnt bei ${(+s.start).toFixed(3)}s, erwartet ${t.toFixed(3)}s (Lücke oder Überlappung).`);
+    if (!(en > st)) errors.push(`Shot ${s.n}: Ende liegt nicht nach dem Anfang.`);
+    s.start = st; s.end = en; s.length = r4(en - st); t = en;
+    if (s.length < 0.25) errors.push(`Shot ${s.n}: ${s.length.toFixed(2)}s ist kürzer als 0,25s.`);
+    else if (s.length < 0.45) warnings.push(`Shot ${s.n}: sehr kurz (${s.length.toFixed(2)}s).`);
+  }
+  const total = t;
+  if (total < 10 || total > 75) errors.push(`Gesamtlänge ${total.toFixed(2)}s liegt außerhalb von 10–75s.`);
+  // per shot: clip, speeds, source budget, hard cuts, reuse
+  const ranges = {};
+  for (const s of shots) {
+    const c = ctx.clips[s.clip];
+    if (!c) { errors.push(`Shot ${s.n}: unbekannter oder nicht ausgewählter Clip "${s.clip}".`); continue; }
+    s.filename = c.filename;
+    const rs = rampsOf(s.speed);
+    const vals = rs ? rs.flatMap(k => [+k.from, +k.to]) : [+(s.speed ?? 1)];
+    if (vals.some(v => !(v >= 0.25 && v <= 3))) errors.push(`Shot ${s.n}: Speed außerhalb 0,25–3×.`);
+    else if (vals.some(v => v < 0.5 || v > 2)) warnings.push(`Shot ${s.n}: Speed unter 0,5× oder über 2× (Ruckel- oder Sprunggefahr).`);
+    if (rs) { let prev = 0; for (const k of rs) {
+      if (!(k.over > 0) || k.at < prev - 1e-3 || k.at + k.over > s.length + 1e-3) errors.push(`Shot ${s.n}: Ramp ${k.from}→${k.to} liegt nicht vollständig im Shot (0–${s.length.toFixed(2)}s).`);
+      if (k.easing && !["easeIn", "easeOut", "easeInOut", "linear"].includes(k.easing)) errors.push(`Shot ${s.n}: unbekanntes Easing "${k.easing}".`);
+      prev = k.at + k.over; } }
+    const tin = s.transitionIn || "cut";
+    if (!["cut", "dissolve", "fadeIn"].includes(tin)) errors.push(`Shot ${s.n}: unbekannte Transition "${tin}".`);
+    if (tin === "fadeIn" && s.n !== 1) errors.push(`Shot ${s.n}: fadeIn nur beim ersten Shot.`);
+    if (tin === "dissolve" && s.n === 1) errors.push("Shot 1: dissolve braucht einen vorherigen Shot.");
+    const d = tin === "cut" ? 0 : +(s.transitionDuration ?? (tin === "dissolve" ? 0.5 : 0.8));
+    if (tin !== "cut" && !(d >= 0.2 && d <= 2)) errors.push(`Shot ${s.n}: Transition-Dauer ${d}s außerhalb 0,2–2s.`);
+    if (tin === "dissolve" && d > s.length) errors.push(`Shot ${s.n}: Dissolve länger als der Shot.`);
+    s.transitionIn = tin; s.transitionDuration = d;
+    s.sourceIn = r4(+s.sourceIn);
+    const lead = tin === "dissolve" ? d * speedAt(s.speed, 0) : 0;
+    const used = srcUsed(s.speed, s.length);
+    s.sourceOut = r4(s.sourceIn + used);
+    const a = s.sourceIn - lead, b = s.sourceOut;
+    if (a < -1e-3) errors.push(`Shot ${s.n}: Source In ${s.sourceIn.toFixed(2)}s zu früh (Dissolve braucht ${lead.toFixed(2)}s Vorlauf).`);
+    if (b > c.duration - 0.01) errors.push(`Shot ${s.n}: braucht Footage bis ${b.toFixed(2)}s, ${c.filename} ist nur ${c.duration.toFixed(2)}s lang (${(b - c.duration).toFixed(2)}s zu viel).`);
+    for (const cut of c.cuts || []) if (a < cut + 0.06 && b > cut - 0.06) errors.push(`Shot ${s.n}: läuft über den harten Schnitt in ${c.filename} bei ${cut.toFixed(2)}s.`);
+    for (const av of c.avoid || []) if (a < av.to && b > av.from) warnings.push(`Shot ${s.n}: nutzt ${av.from.toFixed(1)}–${av.to.toFixed(1)}s von ${c.filename}, laut Analyse problematisch (${av.why}).`);
+    (ranges[s.clip] ||= []).push([a, b, s.n]);
+    if (s.n === shots.length && s.transitionOut === "fadeOut") s.fadeOut = +(s.transitionOutDuration ?? 1);
+  }
+  for (const [clip, rr] of Object.entries(ranges)) {
+    rr.sort((x, y) => x[0] - y[0]);
+    for (let i = 1; i < rr.length; i++) if (rr[i][0] < rr[i - 1][1] - 0.05) errors.push(`Shots ${rr[i - 1][2]} und ${rr[i][2]}: überlappende Quellbereiche in ${ctx.clips[clip]?.filename || clip} (dieselben Bilder doppelt).`);
+  }
+  // music segments: inside the track, on downbeats, total = timeline
+  const m = plan.music || {}, segs = (m.segments || []).map(x => ({ trackStart: +x.trackStart, trackEnd: +x.trackEnd }));
+  if (!segs.length) errors.push("Kein Musikausschnitt angegeben.");
+  const downs = ctx.music.bars.map(b => b.t);
+  segs.forEach((g, i) => {
+    for (const key of ["trackStart", "trackEnd"]) {
+      const v = g[key]; if (key === "trackEnd" && i === segs.length - 1) continue;
+      const nb = nearest(downs, v);
+      if (Math.abs(nb - v) <= 0.09) g[key] = nb; else warnings.push(`Musiksegment ${i + 1}: ${key === "trackStart" ? "Start" : "Ende"} ${v.toFixed(2)}s liegt nicht auf einem Taktanfang (nächster: ${nb.toFixed(2)}s).`);
+    }
+    if (g.trackStart < 0 || g.trackEnd > ctx.music.duration + 0.01 || g.trackEnd - g.trackStart < 0.5) errors.push(`Musiksegment ${i + 1} (${g.trackStart.toFixed(2)}–${g.trackEnd.toFixed(2)}s) ist ungültig.`);
+  });
+  const musicLen = segs.reduce((a, g) => a + (g.trackEnd - g.trackStart), 0);
+  if (segs.length && Math.abs(musicLen - total) > 0.25) errors.push(`Musik dauert ${musicLen.toFixed(2)}s, Timeline ${total.toFixed(2)}s.`);
+  else if (segs.length) { const last = segs[segs.length - 1]; last.trackEnd = r4(last.trackEnd + (total - musicLen)); if (last.trackEnd > ctx.music.duration + 0.01) errors.push("Musik reicht nicht bis zum Ende der Timeline."); }
+  // info: how many cuts land on the music grid
+  const toTrack = x => { let acc = 0; for (const g of segs) { const len = g.trackEnd - g.trackStart; if (x <= acc + len + 1e-6) return g.trackStart + (x - acc); acc += len; } return null; };
+  const cutsAt = shots.slice(1).map(s => s.start);
+  const onGrid = cutsAt.filter(x => { const tt = toTrack(x); return tt != null && Math.abs(nearest(ctx.music.cutPoints, tt) - tt) <= 0.07; }).length;
+  if (cutsAt.length) info.push(`${onGrid} von ${cutsAt.length} Schnitten liegen auf Takt oder halbem Takt.`);
+  return { errors, warnings, info, shots, total: r4(total), music: { segments: segs, fadeIn: +(m.fadeIn ?? 0.3), fadeOut: +(m.fadeOut ?? 1.0) } };
+}
+
+// Build Shotstack Edit JSON from a validated plan
+function buildEdit(v, ctx) {
+  const tw = (from, to, start, length, easing) => { const o = { from, to, start: r4(start), length: r4(length) }; if (easing && easing !== "linear") { o.interpolation = "bezier"; o.easing = easing; } return o; };
+  const speedJson = (spec, shift) => { const rs = rampsOf(spec); if (!rs) return (+spec || 1) === 1 ? undefined : +spec; return rs.map(k => tw(+k.from, +k.to, +k.at + shift, +k.over, k.easing)); };
+  const overlay = [], main = [];
+  for (const s of v.shots) {
+    const c = ctx.clips[s.clip], dis = s.transitionIn === "dissolve" ? s.transitionDuration : 0;
+    const asset = { type: "video", src: c.url, trim: r4(s.sourceIn - dis * speedAt(s.speed, 0)), volume: 0 };
+    const sp = speedJson(s.speed, dis); if (sp !== undefined) asset.speed = sp;
+    const clip = { asset, start: r4(s.start - dis), length: r4(s.length + dis), fit: "crop" };
+    const op = [];
+    if (dis) op.push(tw(0, 1, 0, dis, "easeInOut"));
+    if (s.transitionIn === "fadeIn") op.push(tw(0, 1, 0, s.transitionDuration, "easeOut"));
+    if (s.fadeOut) op.push(tw(1, 0, clip.length - s.fadeOut, s.fadeOut, "easeInOut"));
+    if (op.length) clip.opacity = op;
+    (dis ? overlay : main).push(clip);
+  }
+  // back-to-back clips on the main track chain with "auto" (avoids float overlap errors in Studio)
+  for (let i = 1; i < main.length; i++) { const p = main[i - 1]; const pEnd = (p._s ?? p.start) + p.length; main[i]._s = main[i].start; if (Math.abs(pEnd - main[i].start) < 1e-3) main[i].start = "auto"; }
+  main.forEach(c => delete c._s);
+  const tracks = [];
+  if (overlay.length) tracks.push({ clips: overlay });
+  tracks.push({ clips: main });
+  let off = 0; const segs = v.music.segments;
+  segs.forEach((g, i) => {
+    const L = r4(g.trackEnd - g.trackStart), vol = [];
+    vol.push(tw(0, 1, 0, i === 0 ? Math.max(0.02, v.music.fadeIn) : 0.02));
+    if (i < segs.length - 1) vol.push(tw(1, 0, L - 0.03, 0.03)); else if (v.music.fadeOut > 0) vol.push(tw(1, 0, Math.max(0, L - v.music.fadeOut), Math.min(v.music.fadeOut, L), "easeIn"));
+    tracks.push({ clips: [{ asset: { type: "audio", src: ctx.musicUrl, trim: r4(g.trackStart), volume: vol }, start: r4(off), length: L }] });
+    off += L;
+  });
+  return { timeline: { background: "#000000", tracks }, output: { format: "mp4", resolution: "hd", aspectRatio: "16:9", fps: FPS } };
+}
+
+// Motion estimate between two small grayscale frames (SAD block search) — content shift in px
+function shiftEstimate(a, b, W, x0, y0, w, h, R) {
+  let best = Infinity, bx = 0, by = 0;
+  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+    let s = 0, n = 0;
+    for (let y = y0 + R; y < y0 + h - R; y += 1) for (let x = x0 + R; x < x0 + w - R; x += 1) { s += Math.abs(a[y * W + x] - b[(y + dy) * W + x + dx]); n++; }
+    s /= n; if (s < best) { best = s; bx = dx; by = dy; }
+  }
+  return [bx, by];
+}
+function motionProfile(frames, times, W, H) {
+  const diffs = [];
+  for (let i = 1; i < frames.length; i++) { let s = 0; const A = frames[i - 1], B = frames[i]; for (let k = 0; k < A.length; k++) s += Math.abs(A[k] - B[k]); diffs.push(s / A.length); }
+  const sorted = [...diffs].sort((x, y) => x - y), med = sorted[Math.floor(sorted.length / 2)] || 0;
+  const cuts = []; diffs.forEach((d, i) => { if (d > Math.max(8, 6 * med)) cuts.push(r4((times[i] + times[i + 1]) / 2)); });
+  const pairs = [];
+  for (let i = 0; i + 2 < frames.length; i++) {
+    if (cuts.some(c => c > times[i] && c < times[i + 2])) continue;
+    const A = frames[i], B = frames[i + 2], hw = W / 2, hh = H / 2, R = 4;
+    const q = [[0, 0], [hw, 0], [0, hh], [hw, hh]].map(([x, y]) => shiftEstimate(A, B, W, x, y, hw, hh, R));
+    const dt = times[i + 2] - times[i];
+    const dx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, dy = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+    const push = ((q[1][0] + q[3][0]) - (q[0][0] + q[2][0])) / 2 + ((q[2][1] + q[3][1]) - (q[0][1] + q[1][1])) / 2;
+    pairs.push({ t: times[i], dx: dx / W * 100 / dt, dy: dy / H * 100 / dt, push: push / W * 100 / dt });
+  }
+  const end = times[times.length - 1] || 0, windows = [];
+  for (let w0 = 0; w0 < end; w0 += 0.5) {
+    const ps = pairs.filter(p => p.t >= w0 && p.t < w0 + 0.5); if (!ps.length) continue;
+    const avg = k => ps.reduce((a, p) => a + p[k], 0) / ps.length;
+    windows.push({ from: r4(w0), to: r4(Math.min(end, w0 + 0.5)), panX: +avg("dx").toFixed(1), tiltY: +avg("dy").toFixed(1), push: +avg("push").toFixed(1) });
+  }
+  return { cuts, windows, medianChange: +med.toFixed(2) };
+}
+// ===== CORE-END =====
+</script>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const S = { db: null, mcp: null, sample: null, assets: [], plans: [], clipA: {}, musicA: {}, current: null, busy: false, renderTimer: null };
+  const SHOTSTACK = "shotstack";
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const log = (msg, cls) => { const el = $("log"); const line = document.createElement("div"); if (cls) line.style.color = `var(--${cls})`; line.textContent = `${new Date().toLocaleTimeString()}  ${msg}`; el.appendChild(line); el.scrollTop = el.scrollHeight; };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const localDay = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("sv-SE"); };
+  const todayStr = () => new Date().toLocaleDateString("sv-SE");
+  const fmtDate = iso => { const d = new Date(iso); return isNaN(d) ? "–" : d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); };
+  let todayOnly = true; try { todayOnly = localStorage.getItem("todayOnly") !== "0"; } catch {}
+  $("today-only").checked = todayOnly;
+
+  // ---------- capabilities ----------
+  function setCap(id, state, label) { const el = $(id); el.className = "chip " + state; el.lastChild.textContent = label; }
+  async function boot() {
+    if (!window.claude || !window.claude.use) { showNoCaps(["Speicher", "Shotstack", "Claude"]); return; }
+    const [db, mcp, sample] = await Promise.all(["db", "mcp", "sample"].map(n => window.claude.use(n).catch(() => null)));
+    S.db = db; S.mcp = mcp; S.sample = sample;
+    setCap("cap-db", db ? "ok" : "bad", db ? "Speicher" : "Speicher fehlt");
+    setCap("cap-mcp", mcp ? "ok" : "bad", mcp ? "Shotstack" : "Shotstack fehlt");
+    setCap("cap-sample", sample ? "ok" : "bad", sample ? "Claude" : "Claude fehlt");
+    const missing = [!db && "Speicher", !mcp && "Shotstack-Connector", !sample && "Claude"].filter(Boolean);
+    if (missing.length) showNoCaps(missing);
+    if (!db) return;
+    db.collection("assets").onSnapshot(qs => { S.assets = qs.docs.map(d => ({ id: d.id, ...d.data() })); renderAssets(); }, e => log("Assets konnten nicht geladen werden: " + e.message, "bad"));
+    db.collection("plans").onSnapshot(qs => { S.plans = qs.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || "")); renderPlanList(); if (S.current) { const p = S.plans.find(x => x.id === S.current); if (p) showPlan(p, true); } }, e => log("Pläne konnten nicht geladen werden: " + e.message, "bad"));
+    db.collection("clipAnalysis").onSnapshot(qs => { S.clipA = Object.fromEntries(qs.docs.map(d => [d.id, d.data()])); renderAssets(); });
+    db.collection("musicAnalysis").onSnapshot(qs => { S.musicA = Object.fromEntries(qs.docs.map(d => [d.id, d.data()])); renderAssets(); });
+  }
+  function showNoCaps(list) { $("nocaps").hidden = false; $("nocaps-list").textContent = list.join(", "); }
+
+  // ---------- assets ----------
+  function selection() {
+    const vids = [...document.querySelectorAll("input[data-kind=video]:checked")].map(i => i.value);
+    const mus = document.querySelector("input[data-kind=music]:checked")?.value || null;
+    return { clips: vids, music: mus };
+  }
+  const sigOf = sel => [...sel.clips].sort().join(",") + "|" + sel.music;
+  function renderAssets() {
+    const prev = selection(), hadPrev = prev.clips.length || prev.music;
+    const day = todayStr();
+    const list = S.assets.filter(a => !todayOnly || localDay(a.created) === day).sort((a, b) => (a.kind.localeCompare(b.kind)) || (a.filename || "").localeCompare(b.filename || "", "de", { numeric: true }));
+    $("asset-count").textContent = `${list.length} von ${S.assets.length} angezeigt`;
+    const rows = [];
+    for (const kind of ["video", "music"]) {
+      const items = list.filter(a => a.kind === kind); if (!items.length) continue;
+      rows.push(`<tr class="groupline"><td colspan="7">${kind === "video" ? "Video Clips" : "Musik"} (${items.length})</td></tr>`);
+      items.forEach((a, idx) => {
+        const old = localDay(a.created) !== day;
+        const checked = hadPrev ? (kind === "video" ? prev.clips.includes(a.id) : prev.music === a.id) : (!old && (kind === "video" || idx === items.findIndex(x => localDay(x.created) === day)));
+        const input = kind === "video" ? `<input type="checkbox" id="sel-${a.id}" data-kind="video" value="${a.id}" ${checked ? "checked" : ""} aria-label="${esc(a.filename)} verwenden">`
+                                       : `<input type="radio" name="music" id="sel-${a.id}" data-kind="music" value="${a.id}" ${checked ? "checked" : ""} aria-label="${esc(a.filename)} verwenden">`;
+        const cached = kind === "video" ? (S.clipA[a.id] ? " · analysiert" : "") : (S.musicA[a.id] ? " · analysiert" : "");
+        rows.push(`<tr class="${old ? "old" : ""}"><td>${input}</td><td>${esc(a.filename)}<span class="muted small">${cached}</span></td><td>${kind === "video" ? "Video" : "Musik"}</td><td class="mono">${a.duration != null ? (+a.duration).toFixed(2) + " s" : "–"}</td><td class="mono">${fmtDate(a.created)}</td><td class="mono">${a.width ? `${a.width}×${a.height} · ${a.fps} fps` : "Audio"}</td><td class="mono muted">${esc(a.id.slice(0, 14))}…</td></tr>`);
+      });
+    }
+    $("asset-rows").innerHTML = rows.join("") || `<tr><td colspan="7" class="muted">${S.assets.length ? "Heute wurden keine Assets hochgeladen. Haken „Nur heute“ entfernen, um ältere zu sehen." : "Noch keine Assets. Neue Uploads werden synchronisiert, wenn du Claude im Chat „sync“ schreibst."}</td></tr>`;
+    updateButtons();
+  }
+  $("asset-rows").addEventListener("change", updateButtons);
+  $("today-only").addEventListener("change", e => { todayOnly = e.target.checked; try { localStorage.setItem("todayOnly", todayOnly ? "1" : "0"); } catch {} renderAssets(); });
+  document.querySelectorAll("input[name=style]").forEach(r => r.addEventListener("change", () => { updateButtons(); renderPlanList(); }));
+  const styleNow = () => document.querySelector("input[name=style]:checked").value;
+
+  function updateButtons() {
+    const sel = selection(), ok = sel.clips.length >= 2 && sel.music && S.db && S.mcp && S.sample;
+    $("btn-plan").disabled = !ok || S.busy;
+    const prevSame = S.plans.some(p => p.signature === sigOf(sel) && p.style === styleNow());
+    $("btn-regen").disabled = !ok || S.busy || !prevSame;
+    $("btn-reanalyze").disabled = !ok || S.busy;
+    const names = sel.clips.map(id => S.assets.find(a => a.id === id)?.filename || id);
+    const mus = S.assets.find(a => a.id === sel.music)?.filename;
+    $("sel-summary").textContent = `Auswahl: ${sel.clips.length} Clips${names.length ? ` (${names.join(", ")})` : ""} · Musik: ${mus || "–"} · Style: ${styleNow()}`;
+    const p = S.plans.find(x => x.id === S.current);
+    $("btn-render").disabled = !p || !p.edit || (p.validation?.errors?.length > 0) || S.busy || ["preparing", "rendering"].includes(p.render?.phase);
+    $("btn-studio").disabled = !p || !p.edit || !S.mcp;
+  }
+
+  // ---------- error copy ----------
+  function mcpMsg(e) {
+    const c = e && e.code;
+    if (c === "server_not_connected" || c === "needs_reauth") return "Shotstack-Connector nicht verbunden. In claude.ai unter Einstellungen → Connectors verbinden.";
+    if (c === "not_in_manifest" || c === "approval_required") return "Diese Seite darf Shotstack noch nicht nutzen. Zugriff erlauben, wenn claude.ai danach fragt.";
+    if (c === "tool_error") return "Shotstack meldet einen Fehler: " + (e.message || "");
+    if (c === "server_unavailable") return "Shotstack antwortet gerade nicht. Später erneut versuchen.";
+    return `Shotstack-Aufruf fehlgeschlagen (${c || "unbekannt"}): ${e?.message || ""}`;
+  }
+  function sampleMsg(e) {
+    const c = e && e.code;
+    if (c === "not_granted" || c === "not_declared") return "Claude-Zugriff wurde für diese Seite nicht erlaubt.";
+    if (c === "rate_limited") return "Claude-Nutzungslimit erreicht. Später erneut versuchen.";
+    if (c === "prompt_too_large") return "Zu viel Material für einen Director-Aufruf. Weniger Clips auswählen.";
+    if (c === "invalid_json") return "Claude hat kein gültiges JSON geliefert. Erneut versuchen.";
+    return `Claude-Aufruf fehlgeschlagen (${c || "unbekannt"}): ${e?.message || ""}`;
+  }
+
+  // ---------- clip analysis (browser) ----------
+  function once(el, ev, ms) { return new Promise((res, rej) => { const to = setTimeout(() => rej(new Error(ev + " timeout")), ms); el.addEventListener(ev, () => { clearTimeout(to); res(); }, { once: true }); el.addEventListener("error", () => { clearTimeout(to); rej(new Error("Video konnte nicht geladen werden")); }, { once: true }); }); }
+  async function sampleFrames(asset) {
+    const v = document.createElement("video");
+    v.crossOrigin = "anonymous"; v.muted = true; v.playsInline = true; v.preload = "auto";
+    v.src = asset.url + (asset.url.includes("?") ? "&" : "?") + "director=1";
+    await once(v, "loadeddata", 30000);
+    const dur = v.duration, W = 96, H = 54;
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const cx = cv.getContext("2d", { willReadFrequently: true });
+    const big = document.createElement("canvas"); big.width = 512; big.height = 288; const bx = big.getContext("2d");
+    const frames = [], times = [], step = 1 / 12;
+    const seek = async t => { if (Math.abs(v.currentTime - t) < 1e-3) return; v.currentTime = t; await once(v, "seeked", 8000); };
+    for (let t = 0.02; t < dur - 0.04; t += step) {
+      await seek(t); cx.drawImage(v, 0, 0, W, H);
+      const px = cx.getImageData(0, 0, W, H).data, g = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) g[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+      frames.push(g); times.push(+t.toFixed(4));
+    }
+    const prof = motionProfile(frames, times, W, H);
+    const thumbTimes = [0.15, dur * 0.36, dur * 0.64, dur - 0.2].map(t => +t.toFixed(2)).filter(t => !prof.cuts.some(c => Math.abs(c - t) < 0.15));
+    const thumbs = [];
+    for (const t of thumbTimes) { await seek(t); bx.drawImage(v, 0, 0, 512, 288); thumbs.push(await new Promise(r => big.toBlob(r, "image/jpeg", 0.82))); }
+    v.removeAttribute("src"); v.load();
+    return { duration: +dur.toFixed(3), ...prof, thumbTimes, thumbs };
+  }
+  async function visualReview(asset, m, maxImages) {
+    const imgs = m.thumbs.slice(0, maxImages);
+    const prompt = `You review one AI-generated real-estate video clip for a premium property film. Be a strict, experienced editor.
+The ${imgs.length} attached images are frames from the clip at ${m.thumbTimes.slice(0, imgs.length).join("s, ")}s. Clip length ${m.duration}s.
+Measured camera motion per 0.5 s window (percent of frame per second; panX>0 means image content moves right, i.e. camera moves left; push>0 means push-in, <0 pull-back): ${JSON.stringify(m.windows)}.
+Detected hard cuts inside the file (never cross these): ${JSON.stringify(m.cuts)}.
+Assess content and quality. Look hard for AI generation errors (deformed or merged furniture, melting objects, impossible geometry, warped lines), unflattering details (toilets prominent, clutter), and weak framing.
+Return JSON only: {"room": string, "description": string (max 30 words), "strengths": string, "quality": integer 1-10, "heroPotential": "high"|"medium"|"low", "issues": [{"type":"ai_artifact"|"composition"|"unflattering"|"other","note":string,"from":number,"to":number}], "usable": [{"from":number,"to":number,"note":string}], "avoid": [{"from":number,"to":number,"why":string}]}. Times in seconds of the source clip.`;
+    return S.sample.json(prompt, { images: imgs, modelTier: "default", cache: { gcTime: 86400000 } });
+  }
+  async function ensureClipAnalysis(ids, force) {
+    const lim = await S.sample.limits().catch(() => null);
+    const maxImg = lim?.images?.maxCount || 0;
+    for (const id of ids) {
+      if (!force && S.clipA[id]?.v === 1) continue;
+      const a = S.assets.find(x => x.id === id); if (!a) continue;
+      log(`Analysiere ${a.filename}: Bilder und Bewegung …`);
+      let m; try { m = await sampleFrames(a); } catch (e) { log(`${a.filename}: ${e.message}. Clip wird ohne Bildanalyse verwendet.`, "warn"); m = { duration: +a.duration, cuts: [], windows: [], thumbs: [], thumbTimes: [] }; }
+      let vis = null;
+      if (maxImg && m.thumbs.length) { log(`${a.filename}: Claude prüft Inhalt und Qualität …`); try { vis = await visualReview(a, m, maxImg); } catch (e) { log(`${a.filename}: ${sampleMsg(e)}`, "warn"); } }
+      const doc = { v: 1, assetId: id, filename: a.filename, duration: m.duration || +a.duration, cuts: m.cuts, windows: m.windows, medianChange: m.medianChange ?? null, visual: vis, analyzedAt: new Date().toISOString() };
+      await S.db.collection("clipAnalysis").doc(id).set(doc); S.clipA[id] = doc;
+      log(`${a.filename}: fertig${m.cuts.length ? `, harter Schnitt bei ${m.cuts.join(", ")}s` : ""}${vis ? `, Qualität ${vis.quality}/10` : ""}.`, "ok");
+    }
+  }
+  async function ensureMusicAnalysis(id, force) {
+    if (!force && S.musicA[id]?.v === 1) return S.musicA[id];
+    const a = S.assets.find(x => x.id === id);
+    log(`Analysiere Musik ${a.filename} mit Shotstack (kostenlos) …`);
+    const call = async (tool, input) => { try { return (await S.mcp.callTool(SHOTSTACK, tool, input, { cache: false })).payload; } catch (e) { throw { ...e, src: "mcp" }; } };
+    let res = await call("analyse_music", { src: a.url });
+    for (let i = 0; i < 30 && res && res.status !== "done"; i++) {
+      if (res.status === "failed") throw { code: "tool_error", src: "mcp", message: res.error || "Analyse fehlgeschlagen" };
+      await sleep(5000);
+      res = await call("get_analysis_status", { id: res.id });
+    }
+    if (!res || res.status !== "done") throw { code: "tool_error", src: "mcp", message: "Musikanalyse wurde nicht fertig." };
+    const doc = { v: 1, assetId: id, filename: a.filename, map: res.result, analyzedAt: new Date().toISOString() };
+    await S.db.collection("musicAnalysis").doc(id).set(doc); S.musicA[id] = doc;
+    const mi = musicIndex(res.result);
+    log(`Musik: ${mi.bars.length} Takte à ${mi.barLen.toFixed(2)}s, ${mi.sections.length} Sektionswechsel, ${mi.drops.length} Drops.`, "ok");
+    return doc;
+  }
+
+  // ---------- director ----------
+  const STYLE_DIR = {
+    ELEGANT: "ELEGANT: refined, graceful, confident restraint. Interpret this freely for this material and this music.",
+    DYNAMIC: "DYNAMIC: energetic, rhythmic, driven by the music. Interpret this freely for this material and this music.",
+    CINEMATIC: "CINEMATIC: dramatic, story-driven, strong contrast between moments. Interpret this freely for this material and this music."
+  };
+  function clipBriefs(sel) {
+    return sel.clips.map(id => {
+      const a = S.assets.find(x => x.id === id), c = S.clipA[id] || {};
+      return { id, file: a.filename, duration: c.duration || a.duration, hardCuts: c.cuts || [], motion: c.windows || [], visual: c.visual || null };
+    });
+  }
+  function musicBrief(mi) {
+    return { duration: mi.duration, barLength: mi.barLen, tempoSteady: mi.steady,
+      bars: mi.bars.map(b => [b.i, b.t, b.energy, b.onsets]), sections: mi.sections, drops: mi.drops };
+  }
+  function previousSummary(sig, style) {
+    return S.plans.filter(p => p.signature === sig && p.style === style && p.plan).slice(-4).map(p => ({
+      concept: p.plan.concept, music: p.validation?.music?.segments || p.plan.music?.segments,
+      shots: (p.plan.shots || []).map(s => `${S.assets.find(a => a.id === s.clip)?.filename || s.clip} ${(+s.sourceIn).toFixed(2)}s ${(+s.end - +s.start).toFixed(2)}s ${s.role}`)
+    }));
+  }
+  function directorPrompt(sel, style, mi, prev) {
+    return `You are the creative director and editor of a premium real-estate commercial. Decide the whole edit yourself.
+
+STYLE DIRECTION (a direction, not a template): ${STYLE_DIR[style]}
+
+SOURCE CLIPS (each about 4 s, AI-generated). "motion" = measured camera motion per 0.5 s (percent of frame per second; panX>0: content moves right = camera moves left; push>0: push-in). "hardCuts" = cuts inside the file. "visual" = an editor's review of the frames (quality, issues, usable/avoid ranges in source seconds):
+${JSON.stringify(clipBriefs(sel))}
+
+MUSIC (from Shotstack analysis). bars = [index, start time s, energy 0-1, onset count]. sections: change rise/fall at bar. Use bar starts and half-bar points as cut points; let energy and sections shape the pacing:
+${JSON.stringify(musicBrief(mi))}
+
+YOUR CREATIVE FREEDOM: You decide order, which clips are strong or weak, which to shorten or leave out, which to reuse (only with different, non-overlapping source ranges that make sense), every source in-point, shot lengths, hero shots, montage bursts, speed changes and ramps, cuts or transitions, and which part(s) of the music to use (you may edit the music on bar lines if the sections repeat). There is no fixed pattern: build this edit from this material and this music.
+
+HARD TECHNICAL RULES (a validator checks them):
+- Timeline in seconds, 24 fps. Shots are contiguous: shot 1 starts at 0, every shot starts exactly where the previous ends.
+- Total length 18-45 s. The music segments, played one after another, must last exactly the timeline length.
+- Music segment boundaries should be bar starts from the list (the last end may be anywhere).
+- speed: a number (0.5-2.0 recommended, 0.25-3 allowed) or a list of ramps [{"from":x,"to":y,"at":seconds into the shot,"over":seconds,"easing":"easeIn"|"easeOut"|"easeInOut"|"linear"}]. Before the first ramp the first "from" holds, after the last the last "to" holds.
+- Source footage used = speed integrated over the shot length (constant speed s over L seconds uses s×L seconds). sourceIn + used must stay within the clip duration and must not cross a hard cut.
+- transitionIn: "cut" (default), "dissolve" (0.3-1.0 s, needs sourceIn >= duration×speed for the overlap) or "fadeIn" (first shot only). Last shot may have transitionOut "fadeOut" with transitionOutDuration.
+${prev.length ? `
+PREVIOUS PLANS for exactly this material and style (summaries):
+${JSON.stringify(prev)}
+Create a GENUINELY NEW plan: a different concept, a different opening, different hero choices, a different structure and different music usage where sensible. Do not reuse a previous shot list with small changes. It must still be a strong, sensible edit.` : ""}
+
+Return JSON only:
+{"concept": string (one sentence), "clipAnalysis": string (2-4 sentences: strongest/weakest clips and why), "musicAnalysis": string (2-4 sentences: structure, lifts, where to breathe), "arc": string (2-4 sentences: the planned tension curve),
+ "music": {"segments": [{"trackStart": number, "trackEnd": number}], "fadeIn": number, "fadeOut": number},
+ "shots": [{"clip": clip id, "sourceIn": number, "start": number, "end": number, "speed": number or ramps, "transitionIn": string, "transitionDuration": number, "transitionOut": "fadeOut" (last shot only, optional), "transitionOutDuration": number, "role": short label like "hero", "montage", "build", "breath", "reveal", "outro", "reason": string (max 20 words)}],
+ "omitted": [{"clip": clip id, "reason": string}]}`;
+  }
+  function ctxFor(sel, mi) {
+    const clips = {};
+    for (const id of sel.clips) { const a = S.assets.find(x => x.id === id), c = S.clipA[id] || {};
+      clips[id] = { filename: a.filename, url: a.url, duration: +(c.duration || a.duration), cuts: c.cuts || [], avoid: (c.visual?.avoid || []).filter(x => x && x.to > x.from) }; }
+    return { clips, music: mi, musicUrl: S.assets.find(x => x.id === sel.music).url };
+  }
+  async function runDirector(regen) {
+    const sel = selection(), style = styleNow(), sig = sigOf(sel);
+    S.busy = true; updateButtons();
+    try {
+      await ensureClipAnalysis(sel.clips, false);
+      const mdoc = await ensureMusicAnalysis(sel.music, false);
+      const mi = musicIndex(mdoc.map), ctx = ctxFor(sel, mi);
+      const prev = previousSummary(sig, style);
+      if (regen && !prev.length) log("Kein vorheriger Plan für diese Auswahl, erstelle den ersten.", "warn");
+      const prompt = directorPrompt(sel, style, mi, prev);
+      log(`Director plant (${style}${prev.length ? `, ${prev.length} frühere Pläne als Abgrenzung` : ""}) …`);
+      let plan = await S.sample.json(prompt, { modelTier: "complex", cache: false });
+      let v = validatePlan(plan, ctx);
+      if (v.errors.length) {
+        log(`Validator: ${v.errors.length} Fehler, Director korrigiert …`, "warn");
+        const fix = `${prompt}\n\nYOUR PREVIOUS ANSWER:\n${JSON.stringify(plan)}\n\nTHE VALIDATOR FOUND THESE ERRORS:\n- ${v.errors.join("\n- ")}\n\nReturn the complete corrected plan JSON. Keep your concept and creative intent; change only what the errors require.`;
+        plan = await S.sample.json(fix, { modelTier: "complex", cache: false });
+        v = validatePlan(plan, ctx);
+      }
+      const edit = v.errors.length ? null : buildEdit(v, ctx);
+      const number = S.plans.filter(p => p.signature === sig).length + 1;
+      const id = "p" + Date.now();
+      const doc = { createdAt: new Date().toISOString(), number, style, signature: sig, selection: sel, regen: !!regen,
+        plan, validation: { errors: v.errors, warnings: v.warnings, info: v.info, total: v.total, music: v.music,
+          shots: v.shots.map(s => ({ n: s.n, clip: s.clip, filename: s.filename, sourceIn: s.sourceIn, sourceOut: s.sourceOut, start: s.start, end: s.end, length: s.length, speed: s.speed, transitionIn: s.transitionIn, transitionDuration: s.transitionDuration, fadeOut: s.fadeOut || 0, role: s.role, reason: s.reason })) },
+        edit, render: null };
+      await S.db.collection("plans").doc(id).set(doc);
+      S.current = id; showPlan({ id, ...doc });
+      log(v.errors.length ? `Plan ${number} hat noch ${v.errors.length} Fehler und kann nicht gerendert werden.` : `Plan ${number} fertig: ${v.shots.length} Shots, ${v.total.toFixed(2)}s.`, v.errors.length ? "bad" : "ok");
+    } catch (e) {
+      log(e?.src === "mcp" ? mcpMsg(e) : e?.code ? sampleMsg(e) : "Fehler: " + (e?.message || e), "bad");
+    } finally { S.busy = false; updateButtons(); }
+  }
+  $("btn-plan").addEventListener("click", () => runDirector(false));
+  $("btn-regen").addEventListener("click", () => runDirector(true));
+  $("btn-reanalyze").addEventListener("click", async () => {
+    const sel = selection(); S.busy = true; updateButtons();
+    try { await ensureClipAnalysis(sel.clips, true); await ensureMusicAnalysis(sel.music, true); log("Analysen erneuert.", "ok"); }
+    catch (e) { log(e?.src === "mcp" ? mcpMsg(e) : e?.code ? sampleMsg(e) : "Fehler: " + (e?.message || e), "bad"); } finally { S.busy = false; updateButtons(); }
+  });
+
+  // ---------- plan view ----------
+  const roleColor = r => { const s = (r || "").toLowerCase();
+    if (/hero|reveal/.test(s)) return "var(--r-hero)"; if (/montage|burst|rapid|beat/.test(s)) return "var(--r-montage)";
+    if (/build|intro|open|establish/.test(s)) return "var(--r-build)"; if (/breath|calm|break|pause|hold/.test(s)) return "var(--r-breath)";
+    if (/outro|end|close|land/.test(s)) return "var(--r-outro)"; return "var(--r-other)"; };
+  function renderPlanList() {
+    const sel = selection(), sig = sigOf(sel);
+    const ps = S.plans.filter(p => p.signature === sig);
+    $("plan-list").innerHTML = ps.length ? `<span class="muted small" style="align-self:center">Pläne für diese Auswahl:</span>` + ps.map(p => `<button data-plan="${p.id}" class="${p.id === S.current ? "cur" : ""}">Plan ${p.number} · ${p.style}${p.render?.phase === "done" ? " · gerendert" : ""}</button>`).join("") : "";
+    updateButtons();
+  }
+  $("plan-list").addEventListener("click", e => { const b = e.target.closest("button[data-plan]"); if (!b) return; const p = S.plans.find(x => x.id === b.dataset.plan); if (p) { S.current = p.id; showPlan(p); } });
+  function showPlan(p, quiet) {
+    $("plan-view").hidden = false;
+    const pl = p.plan || {}, v = p.validation || {};
+    $("pv-concept").textContent = pl.concept || "–";
+    $("pv-meta").textContent = `Plan ${p.number} · ${p.style} · ${v.total?.toFixed?.(2) ?? "–"}s · ${(v.shots || []).length} Shots · ${fmtDate(p.createdAt)}${p.regen ? " · Regenerate" : ""}`;
+    $("pv-arc").textContent = pl.arc || "–"; $("pv-clips").textContent = pl.clipAnalysis || "–"; $("pv-music").textContent = pl.musicAnalysis || "–";
+    const T = v.total || 1, tl = $("pv-timeline"), parts = [];
+    let acc = 0; const segs = v.music?.segments || [];
+    const mdoc = S.musicA[p.selection?.music]; const mi = mdoc ? musicIndex(mdoc.map) : null;
+    segs.forEach((g, i) => { if (mi) for (const b of mi.bars) if (b.t >= g.trackStart - 1e-3 && b.t < g.trackEnd - 1e-3) { const x = acc + b.t - g.trackStart; const sec = mi.sections.some(s => Math.abs(s.time - b.t) < 0.05) || mi.drops.some(d => Math.abs(d.time - b.t) < 0.05); parts.push(`<span class="tl-bar ${sec ? "sec" : ""}" style="left:${x / T * 100}%"></span>`); }
+      acc += g.trackEnd - g.trackStart; if (i < segs.length - 1) parts.push(`<span class="tl-seam" style="left:${acc / T * 100}%" title="Musikschnitt"></span>`); });
+    for (const s of v.shots || []) parts.push(`<span class="tl-shot" style="left:${s.start / T * 100}%;width:${s.length / T * 100}%;background:${roleColor(s.role)}" title="${esc(`${s.n} ${s.filename} ${s.role}`)}">${s.n}</span>`);
+    tl.innerHTML = parts.join("");
+    $("pv-legend").innerHTML = [["Hero/Reveal", "--r-hero"], ["Montage", "--r-montage"], ["Build/Intro", "--r-build"], ["Breath", "--r-breath"], ["Outro", "--r-outro"], ["Andere", "--r-other"]].map(([l, c]) => `<span><i style="background:var(${c})"></i>${l}</span>`).join("") + `<span><i style="background:var(--accent);width:3px"></i>Sektion/Drop</span><span><i style="border-left:2px dashed var(--ink);width:0"></i>Musikschnitt</span>`;
+    $("pv-issues").innerHTML = [...(v.errors || []).map(x => `<li class="e">Fehler: ${esc(x)}</li>`), ...(v.warnings || []).map(x => `<li class="w">Hinweis: ${esc(x)}</li>`), ...(v.info || []).map(x => `<li class="muted">${esc(x)}</li>`)].join("");
+    $("pv-shots").innerHTML = (v.shots || []).map(s => `<tr><td class="mono">${s.n}</td><td>${esc(s.filename || s.clip)}</td><td class="mono">${s.sourceIn.toFixed(2)}s</td><td class="mono">${s.sourceOut.toFixed(2)}s</td><td class="mono">${tc(s.start)}</td><td class="mono">${tc(s.end)}</td><td class="mono">${esc(speedLabel(s.speed))}</td><td class="small">${esc(s.transitionIn === "cut" ? "Cut" : `${s.transitionIn} ${s.transitionDuration}s`)}${s.fadeOut ? ` · fadeOut ${s.fadeOut}s` : ""}</td><td><span class="role" style="background:${roleColor(s.role)}">${esc(s.role || "–")}</span></td><td class="reason small">${esc(s.reason || "")}</td></tr>`).join("");
+    $("pv-music-edit").textContent = segs.length ? "Musik: " + segs.map((g, i) => `Segment ${i + 1}: Track ${g.trackStart.toFixed(2)}–${g.trackEnd.toFixed(2)}s`).join(" · ") + ` · Fade-in ${v.music.fadeIn}s, Fade-out ${v.music.fadeOut}s · Timecode mm:ss:frames bei 24 fps` : "";
+    $("pv-omitted").textContent = (pl.omitted || []).length ? "Ausgelassen: " + pl.omitted.map(o => `${S.assets.find(a => a.id === o.clip)?.filename || o.clip} (${o.reason})`).join(" · ") : "";
+    renderPlanList(); showRender(p);
+    if (!quiet) $("plan-view").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ---------- render ----------
+  const PHASE = s => ({ queued: "preparing", fetching: "preparing", rendering: "rendering", saving: "rendering", done: "done", failed: "failed" }[s] || "preparing");
+  function envOf(url) { return !url ? "unbekannt" : /stage/i.test(url) ? "Sandbox (stage), kostenlos mit Wasserzeichen" : "Production (v1), verbraucht Credits"; }
+  function showRender(p) {
+    const r = p?.render;
+    document.querySelectorAll("#steps .step").forEach(el => { el.className = "step"; const s = el.dataset.s;
+      if (!r) return; const order = ["preparing", "rendering", "done"];
+      if (r.phase === "failed") { if (s === "failed") el.classList.add("fail"); else if (order.indexOf(s) < order.indexOf(r.lastPhase || "preparing")) el.classList.add("done"); return; }
+      if (s === r.phase) el.classList.add(r.phase === "done" ? "done" : "on"); else if (order.indexOf(s) > -1 && order.indexOf(s) < order.indexOf(r.phase)) el.classList.add("done"); });
+    $("render-msg").textContent = !r ? "Noch kein Render für diesen Plan." : r.phase === "failed" ? `Render fehlgeschlagen: ${r.error || "ohne Angabe"}` : r.phase === "done" ? "Render fertig." : `Status: ${r.status || r.phase} …`;
+    $("render-result").hidden = !(r && r.url);
+    if (r && r.url) { if ($("render-video").getAttribute("src") !== r.url) $("render-video").src = r.url; $("rr-url").href = r.url; $("rr-url").textContent = r.url; $("rr-env").textContent = envOf(r.url); }
+    if (r && r.id) $("rr-id").textContent = r.id;
+    updateButtons();
+    if (r && r.id && ["preparing", "rendering"].includes(r.phase) && !S.renderTimer) poll(p.id, r.id);
+  }
+  $("btn-render").addEventListener("click", () => {
+    const p = S.plans.find(x => x.id === S.current); if (!p) return;
+    const prevEnv = S.plans.map(x => x.render?.url).filter(Boolean).map(envOf)[0];
+    $("confirm-text").textContent = `Plan ${p.number} (${p.validation.total.toFixed(2)}s, 1280×720, 24 fps) wird über deinen Shotstack-Connector gerendert. ${prevEnv ? `Bisherige Renders liefen auf: ${prevEnv}.` : "In welcher Umgebung der Connector rendert, legt er nicht offen; das zeigt erst die Render-URL. Sandbox (stage) ist kostenlos mit Wasserzeichen, Production (v1) verbraucht Credits nach Videolänge."}`;
+    $("confirm").hidden = false;
+  });
+  $("btn-cancel").addEventListener("click", () => { $("confirm").hidden = true; });
+  $("btn-confirm").addEventListener("click", async () => {
+    $("confirm").hidden = true;
+    const p = S.plans.find(x => x.id === S.current); if (!p || !p.edit) return;
+    S.busy = true; updateButtons();
+    const ref = S.db.collection("plans").doc(p.id);
+    await ref.update({ render: { phase: "preparing", status: "submitting", requestedAt: new Date().toISOString() } });
+    try {
+      const res = await S.mcp.callTool(SHOTSTACK, "render_video", p.edit, { cache: false });
+      const pay = res.payload || {}; const id = pay?.response?.id || pay?.id || pay?.data?.id || findId(pay);
+      if (!id) throw { code: "tool_error", message: "Keine Render-ID erhalten: " + JSON.stringify(pay).slice(0, 200) };
+      await ref.update({ render: { phase: "preparing", status: "queued", id, requestedAt: new Date().toISOString() } });
+      log(`Render gestartet, ID ${id}.`, "ok");
+      poll(p.id, id);
+    } catch (e) {
+      await ref.update({ render: { phase: "failed", error: mcpMsg(e) } });
+      log(mcpMsg(e) + " Ob der Render trotzdem gestartet wurde, ist unklar; vor einem neuen Versuch im Shotstack-Dashboard prüfen.", "bad");
+    } finally { S.busy = false; updateButtons(); }
+  });
+  function findId(o) { if (!o || typeof o !== "object") return null; for (const [k, v] of Object.entries(o)) { if (k === "id" && typeof v === "string" && v.length > 20) return v; const r = findId(v); if (r) return r; } return null; }
+  async function poll(planId, renderId) {
+    const ref = S.db.collection("plans").doc(planId); let last = "preparing";
+    S.renderTimer = true;
+    for (let i = 0; i < 180; i++) {
+      await sleep(i === 0 ? 3000 : 5000);
+      try {
+        const pay = (await S.mcp.callTool(SHOTSTACK, "get_render_status", { id: renderId }, { cache: false })).payload || {};
+        const r = pay.response || pay.data || pay; const status = r.status; const phase = PHASE(status);
+        if (phase !== "failed") last = phase;
+        await ref.update({ render: { phase, lastPhase: last, status, id: renderId, url: r.url || null, error: r.error || null, updatedAt: new Date().toISOString() } });
+        if (phase === "done" || phase === "failed") { log(phase === "done" ? `Render fertig: ${r.url}` : `Render fehlgeschlagen: ${r.error || status}`, phase === "done" ? "ok" : "bad"); break; }
+      } catch (e) { log("Status-Abfrage: " + mcpMsg(e), "warn"); if (!e?.retryable) break; }
+    }
+    S.renderTimer = null; updateButtons();
+  }
+  $("btn-studio").addEventListener("click", async () => {
+    const p = S.plans.find(x => x.id === S.current); if (!p?.edit) return;
+    try { const pay = (await S.mcp.callTool(SHOTSTACK, "create_studio_link", { edit: p.edit }, { cache: false })).payload || {};
+      const url = pay.url; if (!url) throw { code: "tool_error", message: "Kein Link erhalten" };
+      const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = url;
+      const line = document.createElement("div"); line.className = "small"; line.append("Studio-Link (kostenlos, ohne Rendern): ", a); $("render-msg").replaceChildren(line);
+    } catch (e) { log(mcpMsg(e), "bad"); }
+  });
+
+  boot();
+})();
+</script>
