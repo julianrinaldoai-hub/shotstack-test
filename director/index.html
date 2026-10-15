@@ -183,9 +183,10 @@ video { width: 100%; max-width: 100%; border-radius: 8px; background: #000; aspe
           <div><h3>Musik-Analyse</h3><p id="pv-music"></p></div>
         </div>
         <div class="musicpick" id="pv-music-pick"></div>
-        <h3 style="margin-top:14px">Source Clips</h3>
+        <h3 style="margin-top:14px">Source Clips nach Relevanz</h3>
+        <p class="small muted" id="pv-screen"></p>
         <div class="tablebox"><table>
-          <thead><tr><th>Clip</th><th>Raum / Szene</th><th>Wichtigkeit</th><th>Nutzbar</th><th>Stärkster Teil</th><th>Empfohlene Nutzung</th><th>Schwächen</th><th>Im Plan</th></tr></thead>
+          <thead><tr><th>Rang</th><th>Clip</th><th>Raum / Szene</th><th title="propertyImportance · viewerInterest · visualStrength">Relevanz · Interesse · Bild</th><th>Hero / Neben</th><th>Nutzbar</th><th>Stärkster Teil</th><th>Screentime empfohlen</th><th>Rolle / Nutzung</th><th>Schwächen</th><th>Im Plan</th></tr></thead>
           <tbody id="pv-cliptable"></tbody>
         </table></div>
         <h3 style="margin-top:14px">Timeline</h3>
@@ -289,11 +290,26 @@ function musicIndex(map) {
 }
 // Start-point hints for ONE continuous music excerpt per target length: short build, peak in the back half, clean ending.
 // Purely descriptive facts plus a heuristic score; the director chooses.
-function musicStarts(mi, lengths = [20, 25, 30, 35, 40], perLength = 3) {
+// Phase 2: relevance of a clip for the property (content first, then look, then viewer interest)
+function clipWeight(v) {
+  if (!v) return null;
+  const n = (x, d) => { const k = +x; return isFinite(k) ? Math.max(1, Math.min(10, k)) : d; };
+  const pi = n(v.propertyImportance, 5), vi = n(v.viewerInterest, pi), vs = n(v.visualStrength, n((+v.quality || 5), 5));
+  const secondary = v.secondaryScene === true || v.secondaryScene === "yes";
+  const relevance = +(0.45 * pi + 0.30 * vs + 0.25 * vi).toFixed(2);
+  const maxT = isFinite(+v.recommendedMaxScreenTime) ? +v.recommendedMaxScreenTime : null, minT = isFinite(+v.recommendedMinScreenTime) ? +v.recommendedMinScreenTime : null;
+  return { propertyImportance: pi, viewerInterest: vi, visualStrength: vs, secondary, hero: v.heroPotential === true || v.heroPotential === "yes" || v.heroPotential === "high",
+    relevance, lowRelevance: secondary || pi <= 5, maxT, minT, preferredRole: v.preferredRole || "" };
+}
+// seconds of film the material carries well: strong clips up to their max, weak ones only as short inserts
+function strongMaterial(weights) {
+  return +weights.filter(Boolean).reduce((a, w) => a + (w.lowRelevance ? Math.min(w.maxT ?? 1.2, 1.5) : (w.maxT ?? 3)) * (w.visualStrength >= 5 ? 1 : 0.5), 0).toFixed(1);
+}
+function musicStarts(mi, lengths = [23, 26, 29, 32, 35], perLength = 3) {
   const E = b => b.energy ?? 0, accents = [...mi.drops.map(d => ({ t: d.time, k: "drop" })), ...mi.sections.map(x => ({ t: x.time, k: x.change === "fall" ? "fall" : "rise" }))].filter(x => x.t != null);
   const out = [];
   for (const target of lengths) {
-    const cands = [], n = Math.max(4, Math.round(target / mi.barLen));
+    const cands = [], n = Math.max(Math.ceil(23 / mi.barLen), Math.round(target / mi.barLen));
     for (const b0 of mi.bars) {
       // whole bars: the excerpt ends on a bar line (or the track end)
       const t0 = b0.t, t1 = mi.bars[b0.i + n]?.t ?? (b0.i + n === mi.bars.length ? mi.duration : null); if (t1 == null) break;
@@ -334,7 +350,10 @@ function validatePlan(plan, ctx) {
     else if (s.length < 0.45) warnings.push(`Shot ${s.n}: sehr kurz (${s.length.toFixed(2)}s).`);
   }
   const total = t;
-  if (total < 10 || total > 75) errors.push(`Gesamtlänge ${total.toFixed(2)}s liegt außerhalb von 10–75s.`);
+  if (total < 22.5 || total > 45) errors.push(`Gesamtlänge ${total.toFixed(2)}s liegt außerhalb von 23–45s.`);
+  if (ctx.targetLength && Math.abs(total - ctx.targetLength) > 0.3) errors.push(`Gesamtlänge ${total.toFixed(2)}s, der gewählte Musikabschnitt dauert ${ctx.targetLength.toFixed(2)}s. Das letzte Shot-Ende muss dort liegen.`);
+  if (total > 33 && !String(ctx.lengthReason || plan.lengthReason || "").trim()) warnings.push(`${total.toFixed(1)}s ist länger als der typische Bereich 23–32s, ohne Begründung.`);
+  if (ctx.strongSeconds && total > ctx.strongSeconds + 2) warnings.push(`Das starke Material trägt etwa ${ctx.strongSeconds}s, der Edit dauert ${total.toFixed(1)}s. Lieber kürzer als gestreckt.`);
   // per shot: clip, speeds, source budget, hard cuts, reuse
   const ranges = {};
   for (const s of shots) {
@@ -375,6 +394,7 @@ function validatePlan(plan, ctx) {
     (ranges[s.clip] ||= []).push([a, b, s.n, s.length, s.role, s.reuseReason]);
     if (s.n === shots.length && s.transitionOut === "fadeOut") s.fadeOut = +(s.transitionOutDuration ?? 1);
   }
+  const rangesOf = id => (ranges[id] || []).slice().sort((x, y) => x[2] - y[2]);
   for (const [clip, rr] of Object.entries(ranges)) {
     rr.sort((x, y) => x[0] - y[0]);
     for (let i = 1; i < rr.length; i++) if (rr[i][0] < rr[i - 1][1] - 0.05) errors.push(`Shots ${rr[i - 1][2]} und ${rr[i][2]}: überlappende Quellbereiche in ${ctx.clips[clip]?.filename || clip} (dieselben Bilder doppelt).`);
@@ -384,9 +404,22 @@ function validatePlan(plan, ctx) {
       if (x[3] >= 1.8 && y[3] >= 1.8 && Math.abs(x[3] - y[3]) < 0.6) warnings.push(`${fn}: Shots ${x[2]} und ${y[2]} sind zwei fast gleich lange, lange Verwendungen. Besser einmal kurzer Insert, einmal länger.`);
       if (String(x[4] || "").toLowerCase() === String(y[4] || "").toLowerCase()) warnings.push(`${fn}: Shots ${x[2]} und ${y[2]} haben dieselbe Rolle (${x[4]}). Eine zweite Verwendung sollte eine andere Funktion haben.`); }
   }
+  // screen time follows relevance: weak/secondary rooms stay short, main spaces carry the film
+  const screen = {}; for (const s of shots) if (ctx.clips[s.clip]) screen[s.clip] = r4((screen[s.clip] || 0) + s.length);
+  let lowT = 0, highT = 0, haveHigh = false;
+  for (const [id, sec] of Object.entries(screen)) {
+    const c = ctx.clips[id], w = c.weight; if (!w) continue;
+    if (w.lowRelevance) lowT += sec; if (w.propertyImportance >= 8) highT += sec;
+    if (w.maxT != null && sec > w.maxT + (w.lowRelevance ? 0.3 : 1.0)) (w.lowRelevance ? errors : warnings).push(`${c.filename} (${c.room || "?"}, Relevanz ${w.propertyImportance}/10) ist ${sec.toFixed(2)}s zu sehen, empfohlen höchstens ${w.maxT}s.`);
+    if (w.lowRelevance && rangesOf(id).length > 1 && !rangesOf(id).slice(1).every(u => String(u[5] || "").trim())) warnings.push(`${c.filename} ist ein Nebenraum und kommt mehrfach vor. Wiederholung nur mit reuseReason, nicht für Länge.`);
+  }
+  for (const c of Object.values(ctx.clips)) if (c.weight && c.weight.propertyImportance >= 8 && c.usable) haveHigh = true;
+  if (total > 0 && lowT / total > 0.3) errors.push(`Nebenräume und wenig relevante Szenen füllen ${(lowT / total * 100).toFixed(0)}% der Laufzeit (${lowT.toFixed(1)}s), erlaubt sind höchstens 30%.`);
+  else if (total > 0 && lowT / total > 0.2) warnings.push(`Nebenräume füllen ${(lowT / total * 100).toFixed(0)}% der Laufzeit. Hauptbereiche sollten klar dominieren.`);
+  if (haveHigh && total > 0 && highT / total < 0.5) warnings.push(`Hauptbereiche (Relevanz ≥ 8) haben nur ${(highT / total * 100).toFixed(0)}% der Laufzeit.`);
   // dramaturgy hint: secondary rooms rarely open a property film (not a hard rule)
   const first = shots[0] && ctx.clips[shots[0].clip];
-  if (first && first.category === "secondary") warnings.push(`Shot 1 eröffnet mit ${first.filename} (${first.room || "Nebenraum"}). Nebenräume sind normalerweise kein Opening.`);
+  if (first && (first.category === "secondary" || first.weight?.secondary)) warnings.push(`Shot 1 eröffnet mit ${first.filename} (${first.room || "Nebenraum"}). Nebenräume sind normalerweise kein Opening.`);
   // music: ONE continuous excerpt from music.start, exactly as long as the timeline (no internal cuts, no loops)
   const m = plan.music || {};
   if (Array.isArray(m.segments) && m.segments.length > 1) errors.push("Musik darf nicht geschnitten werden: genau ein durchgehender Ausschnitt (music.start).");
@@ -414,7 +447,7 @@ function validatePlan(plan, ctx) {
   const cutsAt = shots.slice(1).map(s => s.start);
   const onGrid = cutsAt.filter(x => { const tt = toTrack(x); return tt != null && Math.abs(nearest(ctx.music.cutPoints, tt) - tt) <= 0.07; }).length;
   if (cutsAt.length) info.push(`${onGrid} von ${cutsAt.length} Schnitten liegen auf Takt oder halbem Takt.`);
-  return { errors, warnings, info, shots, total: r4(total), music: { start: r4(mStart), end: mEnd, segments: segs, reason: m.startReason || "", fadeIn: +(m.fadeIn ?? 0.3), fadeOut: +(m.fadeOut ?? 1.0) } };
+  return { errors, warnings, info, shots, total: r4(total), screen: { perClip: screen, lowRelevanceSeconds: r4(lowT), mainSeconds: r4(highT) }, music: { start: r4(mStart), end: mEnd, segments: segs, reason: m.startReason || "", fadeIn: +(m.fadeIn ?? 0.3), fadeOut: +(m.fadeOut ?? 1.0) } };
 }
 
 // Build Shotstack Edit JSON from a validated plan
@@ -594,14 +627,16 @@ function motionProfile(frames, times, W, H) {
 
   // ---------- clip analysis (browser) ----------
   function once(el, ev, ms) { return new Promise((res, rej) => { const to = setTimeout(() => rej(new Error(ev + " timeout")), ms); el.addEventListener(ev, () => { clearTimeout(to); res(); }, { once: true }); el.addEventListener("error", () => { clearTimeout(to); rej(new Error("Video konnte nicht geladen werden")); }, { once: true }); }); }
-  async function sampleFrames(asset) {
+  // Phase 1 helpers: dense frame sampling. Many frames reach Claude as timestamped contact sheets,
+  // so the image limit per call does not cap how closely a clip is looked at.
+  const SHEET_STEP = 0.25;
+  async function sampleFrames(asset, maxImg) {
     const v = document.createElement("video");
     v.crossOrigin = "anonymous"; v.muted = true; v.playsInline = true; v.preload = "auto";
     v.src = asset.url + (asset.url.includes("?") ? "&" : "?") + "director=1";
     await once(v, "loadeddata", 30000);
     const dur = v.duration, W = 96, H = 54;
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const cx = cv.getContext("2d", { willReadFrequently: true });
-    const big = document.createElement("canvas"); big.width = 512; big.height = 288; const bx = big.getContext("2d");
     const frames = [], times = [], step = 1 / 12;
     const seek = async t => { if (Math.abs(v.currentTime - t) < 1e-3) return; v.currentTime = t; await once(v, "seeked", 8000); };
     for (let t = 0.02; t < dur - 0.04; t += step) {
@@ -611,49 +646,81 @@ function motionProfile(frames, times, W, H) {
       frames.push(g); times.push(+t.toFixed(4));
     }
     const prof = motionProfile(frames, times, W, H);
-    // frames across the whole clip (start, middle, end) so the review can see where it gets weak
-    const thumbTimes = [0.1, 0.2, 0.4, 0.6, 0.8].map(f => f * dur).concat([0.1, dur - 0.15]).map(t => +Math.min(dur - 0.1, Math.max(0.1, t)).toFixed(2))
-      .filter((t, i, a) => a.indexOf(t) === i).sort((x, y) => x - y).filter(t => !prof.cuts.some(c => Math.abs(c - t) < 0.15));
-    const thumbs = [];
-    for (const t of thumbTimes) { await seek(t); bx.drawImage(v, 0, 0, 512, 288); thumbs.push(await new Promise(r => big.toBlob(r, "image/jpeg", 0.82))); }
+    // visible detail per frame (mean gradient): drops when the camera runs into a wall or a single object
+    const grad = frames.map(g => { let sum = 0; for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) { const i = y * W + x; sum += Math.abs(g[i + 1] - g[i - 1]) + Math.abs(g[i + W] - g[i - W]); } return sum / ((W - 2) * (H - 2)); });
+    const gmax = Math.max(...grad, 1e-6), detail = [];
+    for (let t0 = 0; t0 < dur - 0.05; t0 += SHEET_STEP) { const ix = times.map((t, i) => t >= t0 && t < t0 + SHEET_STEP ? i : -1).filter(i => i >= 0); if (ix.length) detail.push([+t0.toFixed(2), Math.round(ix.reduce((a, i) => a + grad[i], 0) / ix.length / gmax * 100)]); }
+    const frameTimes = [];
+    for (let t = 0.1; t <= dur - 0.08; t += SHEET_STEP) if (!prof.cuts.some(c => Math.abs(c - t) < 0.08)) frameTimes.push(+t.toFixed(2));
+    if (dur - 0.1 - frameTimes[frameTimes.length - 1] > 0.12) frameTimes.push(+(dur - 0.1).toFixed(2));
+    const sheets = [];
+    if (maxImg > 0 && frameTimes.length) {
+      const grid = [[2, 2], [3, 3], [4, 4]].find(([c, r]) => Math.ceil(frameTimes.length / (c * r)) <= maxImg) || [4, 4];
+      const [cols, rows] = grid, per = cols * rows, SW = 960, SH = 540, tw = SW / cols, th = SH / rows;
+      const sh = document.createElement("canvas"); sh.width = SW; sh.height = SH; const sx = sh.getContext("2d");
+      for (let k = 0; k < frameTimes.length && sheets.length < maxImg; k += per) {
+        sx.fillStyle = "#000"; sx.fillRect(0, 0, SW, SH);
+        const ts = frameTimes.slice(k, k + per);
+        for (let j = 0; j < ts.length; j++) {
+          await seek(ts[j]); const x = (j % cols) * tw, y = Math.floor(j / cols) * th;
+          sx.drawImage(v, x, y, tw, th);
+          sx.fillStyle = "rgba(0,0,0,0.7)"; sx.fillRect(x, y, 88, 26); sx.fillStyle = "#fff"; sx.font = "bold 18px sans-serif"; sx.fillText(`${ts[j].toFixed(2)}s`, x + 6, y + 19);
+          sx.strokeStyle = "#000"; sx.lineWidth = 2; sx.strokeRect(x, y, tw, th);
+        }
+        sheets.push({ times: ts, grid: `${cols}x${rows}`, blob: await new Promise(r => sh.toBlob(r, "image/jpeg", 0.85)) });
+      }
+    }
     v.removeAttribute("src"); v.load();
-    return { duration: +dur.toFixed(3), ...prof, thumbTimes, thumbs };
+    return { duration: +dur.toFixed(3), ...prof, detail, frameTimes, sheets };
   }
-  async function visualReview(asset, m, maxImages) {
-    // keep start, end and evenly spread middle frames when the image limit is lower than the frame count
-    let idx = m.thumbs.map((_, i) => i);
-    if (idx.length > maxImages) { const k = Math.max(2, maxImages); idx = [...new Set(Array.from({ length: k }, (_, j) => Math.round(j * (m.thumbs.length - 1) / (k - 1))))]; }
-    const imgs = idx.map(i => m.thumbs[i]), times = idx.map(i => m.thumbTimes[i]);
-    const prompt = `You review one AI-generated real-estate video clip for a premium property film. Be a strict, experienced editor.
-The ${imgs.length} attached images are frames from the clip in time order, at ${times.join("s, ")}s. Clip length ${m.duration}s.
+  async function visualReview(asset, m) {
+    const imgs = m.sheets.map(x => x.blob);
+    const layout = m.sheets.map((x, i) => `image ${i + 1} (${x.grid} grid): ${x.times.map(t => t.toFixed(2) + "s").join(", ")}`).join("; ");
+    const prompt = `You are a senior real-estate film editor reviewing ONE AI-generated video clip before any editing starts. Take your time: understanding this clip correctly matters more than speed. Do not plan a timeline; only analyse.
+
+The ${imgs.length} attached images are contact sheets of the clip. Each tile is one frame with its source time stamped top-left; tiles run left to right, top to bottom, every ${SHEET_STEP}s across the whole clip: ${layout}. Clip length ${m.duration}s.
 Measured camera motion per 0.5 s window (percent of frame per second; panX>0 means image content moves right, i.e. camera moves left; push>0 means push-in, <0 pull-back): ${JSON.stringify(m.windows)}.
+Visible detail per ${SHEET_STEP}s [time, percent of the clip's maximum] (a strong drop usually means the camera runs into a wall or a single object): ${JSON.stringify(m.detail)}.
 Detected hard cuts inside the file (never cross these): ${JSON.stringify(m.cuts)}.
 
-1. What is it? Room or scene type and its role in a property presentation. Primary spaces: exterior/building, living room, open living/dining, kitchen, master bedroom, terrace/garden/pool, a striking architectural space. Secondary spaces: bathroom, WC, small hallway, storage, utility, small detail. Judge importance for the property (5 = a hero space buyers care most about, 1 = filler).
-2. Go frame by frame from start to end. Decide when the room reads well and when it stops working: the camera gets too close to an object (e.g. only a shower head or a wall fills the frame), perspective or composition gets worse, AI artifacts increase (deformed or merged furniture, melting objects, impossible geometry, warped lines), unflattering details (toilet prominent, clutter), or the frame gets boring. Interpolate times between frames from the motion data.
-3. usableStart/usableEnd: the range that may be shown at all. strongestStart/strongestEnd: the best part inside it. A clip does not have to be usable to its end; cut weak beginnings or endings off. Say why in weakStartReason/weakEndReason ("" if the start/end is fine).
+STEP 1, frame by frame: describe every tile briefly (what is visible, how readable the room is, composition, any AI artifact).
+STEP 2, the clip's course: split the clip into segments and mark when the shot starts well, when the movement is stable, when the best composition is reached, when an object comes too close, when the room becomes hard to read, when AI artifacts appear (deformed or merged furniture, melting objects, impossible geometry, warped lines), when it gets visually boring, and which section is strongest.
+STEP 3, meaning for the property: what room or scene is it and how much would a buyer care?
+ - Typically high relevance: building/exterior, living room, living/dining, kitchen, balcony, terrace, view, garden, pool, large open spaces, architecturally striking areas.
+ - Typically secondary: bathroom, guest WC, gym, dressing room, hallway, storage, technical rooms, small side rooms.
+ - Rough defaults (adapt them to what you actually see; an exceptional spa bathroom can rate higher): exterior 10/10, living room 10/10, terrace 9/9, kitchen 8-9, bedroom 6-7, gym 5/5, bathroom 4/4, dressing room 3/3 (propertyImportance/viewerInterest).
+ - visualStrength rates only how good this clip looks in its usable range.
+STEP 4, usage: usable range (may be shown at all), strongest range, how much screen time this clip deserves in a 25-30 s property film (secondary scenes are usually short inserts of 0.7-1.5 s, main spaces 2.5-5 s), and its preferred role.
 
-Return JSON only: {"room": string, "roomType": "exterior"|"living"|"living_dining"|"kitchen"|"dining"|"bedroom"|"bathroom"|"wc"|"hallway"|"storage"|"terrace_garden"|"detail"|"other", "category": "primary"|"secondary"|"detail", "importance": integer 1-5, "openingSuitability": "high"|"medium"|"low", "description": string (max 30 words), "strengths": string, "quality": integer 1-10, "heroPotential": "high"|"medium"|"low",
+Return JSON only, in this field order:
+{"frames": [{"t": number, "note": string (max 14 words)}],
+ "segments": [{"from": number, "to": number, "state": "weak_start"|"good"|"stable"|"best"|"too_close"|"hard_to_read"|"ai_artifacts"|"boring"|"other", "note": string}],
+ "room": string, "roomType": "exterior"|"living"|"living_dining"|"kitchen"|"dining"|"bedroom"|"bathroom"|"wc"|"gym"|"dressing_room"|"hallway"|"storage"|"technical"|"balcony"|"terrace"|"view"|"garden"|"pool"|"detail"|"other",
+ "category": "primary"|"secondary"|"detail", "secondaryScene": "yes"|"no", "propertyImportance": integer 1-10, "viewerInterest": integer 1-10, "visualStrength": integer 1-10, "heroPotential": "yes"|"no", "openingSuitability": "high"|"medium"|"low",
+ "description": string (max 30 words), "strengths": string, "quality": integer 1-10,
  "usableStart": number, "usableEnd": number, "strongestStart": number, "strongestEnd": number, "weakStartReason": string, "weakEndReason": string,
- "frames": [{"t": number, "note": string (max 12 words)}], "speedAdvice": string (max 20 words: may it be sped up or slowed down, and in which range),
- "recommendedUsage": string (max 15 words, e.g. "opener", "long hero 2.5-3 s", "short insert 0.5-1 s", "skip"), "weaknesses": [string],
- "issues": [{"type":"ai_artifact"|"composition"|"unflattering"|"too_close"|"other","note":string,"from":number,"to":number}], "avoid": [{"from":number,"to":number,"why":string}]}. Times in seconds of the source clip.`;
-    return S.sample.json(prompt, { images: imgs, modelTier: "default", cache: { gcTime: 86400000 } });
+ "recommendedMinScreenTime": number, "recommendedMaxScreenTime": number, "preferredRole": "opening"|"establishing"|"hero"|"secondary insert"|"detail insert"|"burst"|"breath"|"finale"|"skip",
+ "speedAdvice": string (max 20 words), "recommendedUsage": string (max 15 words), "weaknesses": [string],
+ "issues": [{"type":"ai_artifact"|"composition"|"unflattering"|"too_close"|"other","note":string,"from":number,"to":number}], "avoid": [{"from":number,"to":number,"why":string}]}
+Times in seconds of the source clip.`;
+    return S.sample.json(prompt, { images: imgs, modelTier: "complex", cache: { gcTime: 86400000 } });
   }
-  const CLIP_V = 2; // v2: room role, usable/strongest ranges, frame notes
+  const CLIP_V = 3; // v3: dense contact sheets, relevance scores, screen-time range, preferred role
   async function ensureClipAnalysis(ids, force) {
     const lim = await S.sample.limits().catch(() => null);
     const maxImg = lim?.images?.maxCount || 0;
-    for (const id of ids) {
-      if (!force && S.clipA[id]?.v === CLIP_V) continue;
-      const a = S.assets.find(x => x.id === id); if (!a) continue;
-      log(`Analysiere ${a.filename}: Bilder und Bewegung …`);
-      let m; try { m = await sampleFrames(a); } catch (e) { log(`${a.filename}: ${e.message}. Clip wird ohne Bildanalyse verwendet.`, "warn"); m = { duration: +a.duration, cuts: [], windows: [], thumbs: [], thumbTimes: [] }; }
+    const todo = ids.filter(id => force || S.clipA[id]?.v !== CLIP_V);
+    let k = 0;
+    for (const id of todo) {
+      const a = S.assets.find(x => x.id === id); if (!a) continue; k++;
+      log(`Phase 1/4 · Clip ${k}/${todo.length} ${a.filename}: Frames alle ${SHEET_STEP}s, Bewegung, Detail …`);
+      let m; try { m = await sampleFrames(a, maxImg); } catch (e) { log(`${a.filename}: ${e.message}. Clip wird ohne Bildanalyse verwendet.`, "warn"); m = { duration: +a.duration, cuts: [], windows: [], detail: [], frameTimes: [], sheets: [] }; }
       let vis = null;
-      if (maxImg && m.thumbs.length) { log(`${a.filename}: Claude prüft Inhalt und Qualität …`); try { vis = await visualReview(a, m, maxImg); } catch (e) { log(`${a.filename}: ${sampleMsg(e)}`, "warn"); } }
-      const doc = { v: CLIP_V, assetId: id, filename: a.filename, duration: m.duration || +a.duration, cuts: m.cuts, windows: m.windows, medianChange: m.medianChange ?? null, visual: vis, analyzedAt: new Date().toISOString() };
+      if (m.sheets.length) { log(`${a.filename}: Claude analysiert ${m.frameTimes.length} Frames auf ${m.sheets.length} Kontaktbogen …`); try { vis = await visualReview(a, m); } catch (e) { log(`${a.filename}: ${sampleMsg(e)}`, "warn"); } }
+      const doc = { v: CLIP_V, assetId: id, filename: a.filename, duration: m.duration || +a.duration, cuts: m.cuts, windows: m.windows, detail: m.detail, frameTimes: m.frameTimes, medianChange: m.medianChange ?? null, visual: vis, analyzedAt: new Date().toISOString() };
       await S.db.collection("clipAnalysis").doc(id).set(doc); S.clipA[id] = doc;
-      log(`${a.filename}: fertig${m.cuts.length ? `, harter Schnitt bei ${m.cuts.join(", ")}s` : ""}${vis ? `, Qualität ${vis.quality}/10` : ""}.`, "ok");
+      const w = clipWeight(vis);
+      log(`${a.filename}: fertig${m.cuts.length ? `, harter Schnitt bei ${m.cuts.join(", ")}s` : ""}${vis ? ` · ${vis.room || vis.roomType} · Relevanz ${w.propertyImportance}/10, Interesse ${w.viewerInterest}/10, Bild ${w.visualStrength}/10 · nutzbar ${(+vis.usableStart).toFixed(1)}–${(+vis.usableEnd).toFixed(1)}s` : ""}.`, "ok");
     }
   }
   async function ensureMusicAnalysis(id, force) {
@@ -689,12 +756,24 @@ Transitions: hard cuts are frequent here too, especially on strong beats, on dro
     const a = Math.max(0, +v.usableStart), b = Math.min(d || Infinity, +v.usableEnd);
     return isFinite(a) && isFinite(b) && b - a >= 0.3 ? [r4(a), r4(b)] : null;
   }
+  // Phase 2: rank the selected clips by relevance (computed, deterministic)
+  function weighting(sel) {
+    const rows = sel.clips.map(id => { const a = S.assets.find(x => x.id === id), c = S.clipA[id] || {}, w = clipWeight(c.visual);
+      return { id, file: a.filename, room: c.visual?.room || c.visual?.roomType || "?", usable: usableOf(c), w }; });
+    rows.sort((x, y) => (y.w?.relevance ?? 0) - (x.w?.relevance ?? 0));
+    rows.forEach((r, i) => r.rank = i + 1);
+    return { rows, strongSeconds: strongMaterial(rows.map(r => r.w)) };
+  }
+  function rankingBrief(W) {
+    return W.rows.map(r => ({ rank: r.rank, clip: r.id, file: r.file, room: r.room, relevance: r.w?.relevance ?? null, propertyImportance: r.w?.propertyImportance, viewerInterest: r.w?.viewerInterest, visualStrength: r.w?.visualStrength,
+      hero: r.w?.hero, secondary: r.w?.secondary, lowRelevance: r.w?.lowRelevance, screenTime: r.w ? [r.w.minT, r.w.maxT] : null, preferredRole: r.w?.preferredRole, usable: r.usable }));
+  }
   function clipBriefs(sel) {
     return sel.clips.map(id => {
       const a = S.assets.find(x => x.id === id), c = S.clipA[id] || {}, v = c.visual || null;
       return { id, file: a.filename, duration: c.duration || a.duration, hardCuts: c.cuts || [], motion: c.windows || [],
-        visual: v && { room: v.room, roomType: v.roomType, category: v.category, importance: v.importance, openingSuitability: v.openingSuitability, description: v.description, strengths: v.strengths, quality: v.quality, heroPotential: v.heroPotential,
-          usable: usableOf(c), strongest: [v.strongestStart, v.strongestEnd], weakStartReason: v.weakStartReason, weakEndReason: v.weakEndReason, frames: v.frames, speedAdvice: v.speedAdvice,
+        visual: v && { room: v.room, roomType: v.roomType, description: v.description, strengths: v.strengths, openingSuitability: v.openingSuitability,
+          usable: usableOf(c), strongest: [v.strongestStart, v.strongestEnd], weakStartReason: v.weakStartReason, weakEndReason: v.weakEndReason, segments: v.segments, speedAdvice: v.speedAdvice,
           recommendedUsage: v.recommendedUsage, weaknesses: v.weaknesses, issues: v.issues, avoid: v.avoid } };
     });
   }
@@ -702,101 +781,152 @@ Transitions: hard cuts are frequent here too, especially on strong beats, on dro
     return { duration: mi.duration, barLength: mi.barLen, tempoSteady: mi.steady,
       bars: mi.bars.map(b => [b.i, b.t, b.energy, b.onsets]), sections: mi.sections, drops: mi.drops };
   }
+  // the chosen excerpt in film time: what the editor cuts against
+  function musicWindowBrief(mi, start, len) {
+    const rel = t => +(t - start).toFixed(2), inW = t => t >= start - 1e-3 && t < start + len - 1e-3;
+    return { lengthSeconds: len, bars: mi.bars.filter(b => inW(b.t)).map(b => [rel(b.t), b.energy, b.onsets]),
+      sections: mi.sections.filter(x => inW(x.time)).map(x => ({ at: rel(x.time), change: x.change })), drops: mi.drops.filter(d => inW(d.time)).map(d => ({ at: rel(d.time) })) };
+  }
   function previousSummary(sig, style) {
-    return S.plans.filter(p => p.signature === sig && p.style === style && p.plan).slice(-4).map(p => ({
-      concept: p.plan.concept, musicStart: p.validation?.music?.start ?? p.validation?.music?.segments?.[0]?.trackStart, length: p.validation?.total,
-      shots: (p.plan.shots || []).map(s => `${S.assets.find(a => a.id === s.clip)?.filename || s.clip} ${(+s.sourceIn).toFixed(2)}s ${(+s.end - +s.start).toFixed(2)}s ${s.role}`)
+    return S.plans.filter(p => p.signature === sig && p.style === style && p.plan).slice(-2).map(p => ({
+      concept: p.plan.concept, length: p.validation?.total,
+      order: (p.validation?.shots || []).map(s => `${s.filename} ${(+s.length).toFixed(1)}s ${s.role}`).join(" | ")
     }));
   }
-  function directorPrompt(sel, style, mi, prev, musicName) {
-    return `You are the creative director and editor of a premium real-estate film. Decide the whole edit yourself.
+  const PRIORITIES = `PRIORITIES for screen time when decisions compete (1 wins over 2, and so on):
+1. relevance of the room for the property
+2. visual quality of the concrete clip range
+3. viewer interest
+4. music / timing
+5. style
+6. completeness of the material (deliberately last: not every clip has to appear)`;
+  // Phase 3: choose ONE continuous music excerpt and the film length from material + music
+  function musicPickPrompt(style, mi, W, musicName) {
+    return `You are the music editor of a premium real-estate film. The clips are already analysed and ranked. Now choose the music excerpt; do not plan shots yet.
+
+STYLE: ${STYLE_DIR[style].split("\n")[0]}
+
+MATERIAL (ranked by relevance; screenTime = recommended [min, max] seconds per clip; lowRelevance clips should only appear briefly or not at all):
+${JSON.stringify(rankingBrief(W))}
+Strong material carries roughly ${W.strongSeconds} s of film.
+
+MUSIC "${musicName}" (from Shotstack analysis). bars = [index, start time s, energy 0-1, onset count]; sections change rise/fall; drops are big hits:
+${JSON.stringify(musicBrief(mi))}
+Computed start candidates per length (hints with facts and a heuristic score, not a ranking you must follow): ${JSON.stringify(musicStarts(mi))}
+
+RULES:
+- The music is never cut: one start point (a bar start), then it plays continuously to the end of the film. No jumps, repeats or loops.
+- Film length comes from the material and the music, not from a fixed target. Minimum about 23 s, typical 23-32 s. Longer than about 32-35 s only if there is enough strong material AND the music structure really justifies it. If the strong material carries only about 24 s, a very good 24 s film beats a stretched 35 s film that shows every room several times.
+- Choose start and length together so the excerpt gives a good arc: a short build, a good entry, a drop or peak at a sensible moment, a usable ending (ideally on a bar line or a section change).
+
+Return JSON only: {"musicAnalysis": string (2-4 sentences), "start": number, "length": number, "startReason": string (1-2 sentences), "lengthReason": string (1-2 sentences: why this length for this material and this music), "keyMoments": [{"at": number (seconds into the film), "what": string}]}`;
+  }
+  function directorPrompt(sel, style, mi, prev, musicName, pick, W) {
+    return `You are the creative director and editor of a premium real-estate film. The clips are analysed (phase 1), ranked (phase 2) and the music excerpt is chosen (phase 3). Now plan the edit (phase 4).
 
 STYLE DIRECTION (a direction, not a template): ${STYLE_DIR[style]}
 
-PRIORITIES when decisions compete (1 wins over 2, and so on):
-1. a visually good clip range on screen
-2. a sensible real-estate tension arc
-3. music sync
-4. style
-5. variation / creativity
-6. using as many clips as possible
-Leaving out weak parts of a clip, or a whole weak clip, is completely fine.
+${PRIORITIES}
 
-SOURCE CLIPS (each about 4 s, AI-generated). "motion" = measured camera motion per 0.5 s (percent of frame per second; panX>0: content moves right = camera moves left; push>0: push-in). "hardCuts" = cuts inside the file. "visual" = a frame-by-frame editor's review: room type and category, importance for the property, usable range (only these source seconds may be shown), strongest range, why the start/end is weak, notes per frame, speed advice, recommended usage:
+GOAL: it must feel as if a human editor decided "this property sells through the building, the living room, the terrace and the kitchen", not "there are 10 clips, so each appears about equally often". Do NOT try to give all rooms similar screen time.
+
+CLIP RANKING (phase 2, computed from the analysis: relevance = 0.45 x propertyImportance + 0.30 x visualStrength + 0.25 x viewerInterest; screenTime = recommended [min, max] seconds in total for the film):
+${JSON.stringify(rankingBrief(W))}
+
+CLIP DETAILS (phase 1, frame-by-frame review). "motion" = measured camera motion per 0.5 s (percent of frame per second; panX>0: content moves right = camera moves left; push>0: push-in). "hardCuts" = cuts inside the file. "segments" = how the clip develops over time:
 ${JSON.stringify(clipBriefs(sel))}
 
-MUSIC "${musicName}" (from Shotstack analysis). bars = [index, start time s, energy 0-1, onset count]. sections: change rise/fall at time. drops: big hits:
-${JSON.stringify(musicBrief(mi))}
+MUSIC (phase 3, fixed): "${musicName}" from ${pick.start.toFixed(2)} s, ${pick.length.toFixed(2)} s long, played continuously. Why: ${pick.startReason} ${pick.lengthReason}
+The excerpt in FILM time (seconds from the first frame): ${JSON.stringify(musicWindowBrief(mi, pick.start, pick.length))}
+Key moments: ${JSON.stringify(pick.keyMoments || [])}
+The last shot must end exactly at ${pick.length.toFixed(2)} s. Use bar starts and half-bars in film time as cut points.
 
-MUSIC IS NEVER CUT. Choose ONE start point in the track. From there the music plays continuously until the video ends: no jumps to another part of the song, no repeats or loops, no internal music cuts. The video adapts to the music, not the other way round. Pick the start (on a bar start) and the video length together so this excerpt gives a good arc for the film: a short build-up, a good entry, a drop or peak at a sensible moment, a usable ending. Computed start candidates per length (hints with facts and a heuristic score, not a ranking you must follow): ${JSON.stringify(musicStarts(mi))}
+SCREEN TIME:
+- Main spaces with high propertyImportance and viewerInterest get clearly more time (e.g. living room 3-5 s, possibly used twice with different ranges and functions). Secondary scenes (bathroom, guest WC, gym, dressing room, hallway, storage, technical rooms) appear much shorter: 0.7-1.5 s is often enough, a dressing room maybe only a short insert. Weak or uninteresting rooms may be left out entirely.
+- Respect each clip's recommended max screen time. Secondary and low-relevance scenes together should stay well under a quarter of the film.
+- Never place a clip just for completeness. Never reuse a clip just to make the film longer.
 
-REAL-ESTATE DRAMATURGY. Think in roles: opening/hook, establishing, hero rooms, secondary rooms, details/inserts, energy burst, finale (a breath is fine too). Not every room matters equally: big, visually strong spaces get more screen time, secondary rooms appear shorter, details work as short inserts. Ask for every clip not only "does it look good?" but "what role does this room play in this property and where in the film does it make sense?". Open with an exterior/building, a strong outdoor shot, a large living room, open living/dining, an architecturally strong room or an especially impressive hero shot. Bathrooms, WCs, small hallways, storage and small details normally come later or as short inserts. This is not a hard rule: if a bathroom is exceptional and the strongest shot of all the material, you may decide otherwise, and say why.
+REAL-ESTATE DRAMATURGY: think in roles (opening/hook, establishing, hero rooms, secondary rooms, details/inserts, energy burst, finale, breath). Open with an exterior/building, a strong outdoor shot, a large living room, open living/dining, an architecturally strong room or the most impressive hero shot. Secondary rooms come later or as short inserts. Not a hard rule: if a secondary room is exceptional and among the strongest shots, you may decide otherwise and say why.
+NO FORMULA: do not default to the same sequence for every film (e.g. exterior, living room, kitchen, bathroom montage, terrace, exterior finale). Such a structure may appear when it truly fits, but let the structure come from this music, this material, the number of strong clips, the available hero shots, the style and the dynamics of the camera moves.
 
-USABLE RANGE FIRST, THEN LENGTH, THEN SPEED. For every shot first pick the visible source range inside the clip's usable range (prefer the strongest range for hero moments), then the shot length, and only then the speed. Bad, too close, distorted or boring end ranges are dropped: a clip never has to be used to its end. Do NOT speed a clip up just to fit all of its seconds in. If only 2 s of a 4 s clip look good, use those 2 s cleanly.
+USABLE RANGE FIRST, THEN LENGTH, THEN SPEED. For every shot first pick the visible source range inside the clip's usable range (prefer the strongest range for hero moments), then the shot length, and only then the speed. Bad, too close, distorted or boring ranges are dropped: a clip never has to be used to its end. Do not speed a clip up just to fit all of its seconds in.
 - Speed up only if the whole used range works visually, the movement really looks better faster, and no bad end frames or AI artifacts become visible.
 - Slow down only if there are enough good frames, the movement is stable, and the slowed shot looks high-end.
 - Give sourceEnd for every shot. For a constant speed you may set "speed": "auto", then speed = (sourceEnd - sourceIn) / shot length.
 
-REPETITION. A source clip normally appears at most 2 times. A third use only in a well-justified exception (then set "reuseReason"). When a clip appears twice: clearly different source ranges, a different function in the edit, and not two nearly identical long uses. Good: a 0.4-1.0 s insert during a montage, later a longer 1.5-3.7 s room shot. Bad: 0.0-3.0 s, later 0.3-3.3 s, later 0.5-3.5 s.
+REPETITION: a second use only if it uses a different source range, the clip is especially strong, it makes musical sense and the shot has a different function (e.g. living room first as a short teaser, later as the long hero). Give "reuseReason" for every second or later use. A clip normally appears at most 2 times. Never two long uses of a secondary room.
 
-TRANSITIONS: decide shot by shot which transition looks best between exactly these two shots at exactly this moment of the music. Not "style X = always crossfade". Hard cuts land on beats and especially on drops and rises; never soften a drop. For every non-cut transition give "transitionReason".
-
-YOUR CREATIVE FREEDOM: within these principles you decide order, which clips are strong or weak, which to shorten or leave out, reuse, every source range, shot lengths, hero shots, montage bursts, speed changes and ramps, transitions, the music start and the film length. There is no fixed pattern: build this edit from this property, these clips, their quality, this music and this style.
+TRANSITIONS: decide shot by shot which transition looks best between exactly these two shots at exactly this moment of the music. Hard cuts land on beats and especially on drops and rises; never soften a drop. For every non-cut transition give "transitionReason".
 
 HARD TECHNICAL RULES (a validator checks them):
-- Timeline in seconds, 24 fps. Shots are contiguous: shot 1 starts at 0, every shot starts exactly where the previous ends.
-- Total length 18-45 s. music.start + total length must stay within the track (${mi.duration.toFixed(2)} s).
+- Timeline in seconds, 24 fps. Shots are contiguous: shot 1 starts at 0, every shot starts exactly where the previous ends; the last ends at ${pick.length.toFixed(2)} s.
 - Every shot shows only source seconds inside the clip's usable range (incl. a dissolve's lead-in).
 - speed: a number (0.5-2.0 recommended, 0.25-3 allowed), "auto", or a list of ramps [{"from":x,"to":y,"at":seconds into the shot,"over":seconds,"easing":"easeIn"|"easeOut"|"easeInOut"|"linear"}]. Before the first ramp the first "from" holds, after the last the last "to" holds.
-- Source footage used = speed integrated over the shot length (constant speed s over L seconds uses s×L seconds). It must stay within the clip and must not cross a hard cut.
-- transitionIn: "cut" (default), "dissolve" (0.3-1.0 s, needs sourceIn - duration×speed inside the usable range for the overlap) or "fadeIn" (first shot only). Last shot may have transitionOut "fadeOut" with transitionOutDuration.
+- Source footage used = speed integrated over the shot length. It must stay within the clip and must not cross a hard cut.
+- transitionIn: "cut" (default), "dissolve" (0.3-1.0 s, needs sourceIn - duration x speed inside the usable range for the overlap) or "fadeIn" (first shot only). Last shot may have transitionOut "fadeOut" with transitionOutDuration.
 ${prev.length ? `
-PREVIOUS PLANS for exactly this material and style (summaries):
-${JSON.stringify(prev)}
-Create a GENUINELY NEW plan: a different concept, a different opening, different hero choices, a different structure and a different music start where sensible. Do not reuse a previous shot list with small changes. It must still be a strong, sensible edit.` : ""}
+EARLIER PLANS for this material and style, for reference only: ${JSON.stringify(prev)}
+Do not overweight them. Your plan may resemble an earlier one, even closely, where this music supports that structure, the material works the same way and the result gets better. Do not cut differently just to be different: the goal is the best edit for exactly this material, this music and this style, not maximum difference. Avoid only copying a weaker choice out of habit.` : ""}
 
 Return JSON only:
-{"concept": string (one sentence), "clipAnalysis": string (2-4 sentences: which rooms carry the property, strongest/weakest clips and why), "musicAnalysis": string (2-4 sentences: structure, lifts, where to breathe), "arc": string (2-4 sentences: the planned tension curve),
- "music": {"start": number (seconds in the track, a bar start), "startReason": string (1-2 sentences: why this start gives the best arc for this length), "fadeIn": number, "fadeOut": number},
- "clips": [{"clip": clip id, "importance": integer 1-5 within THIS property, "plannedUsage": string (max 15 words)}],
- "shots": [{"clip": clip id, "sourceIn": number, "sourceEnd": number, "start": number, "end": number, "speed": number or "auto" or ramps, "transitionIn": string, "transitionDuration": number, "transitionReason": string (non-cut only), "transitionOut": "fadeOut" (last shot only, optional), "transitionOutDuration": number, "role": one of "opening", "establishing", "hero", "secondary", "insert", "burst", "breath", "finale", "reason": string (max 25 words: why exactly this range of the clip), "reuseReason": string (only for a 3rd use)}],
+{"concept": string (one sentence: what this property sells through), "clipAnalysis": string (2-4 sentences: which rooms carry the property and get the time, which stay short or are left out), "arc": string (2-4 sentences: the planned tension curve),
+ "music": {"fadeIn": number, "fadeOut": number},
+ "clips": [{"clip": clip id, "plannedUsage": string (max 15 words)}],
+ "shots": [{"clip": clip id, "sourceIn": number, "sourceEnd": number, "start": number, "end": number, "speed": number or "auto" or ramps, "transitionIn": string, "transitionDuration": number, "transitionReason": string (non-cut only), "transitionOut": "fadeOut" (last shot only, optional), "transitionOutDuration": number, "role": one of "opening", "establishing", "hero", "secondary", "insert", "burst", "breath", "finale", "reason": string (max 25 words: why exactly this range of the clip and this length), "reuseReason": string (second or later use only)}],
  "omitted": [{"clip": clip id, "reason": string}]}`;
   }
   function ctxFor(sel, mi, style) {
     const clips = {};
     for (const id of sel.clips) { const a = S.assets.find(x => x.id === id), c = S.clipA[id] || {}, v = c.visual || {};
       clips[id] = { filename: a.filename, url: a.url, duration: +(c.duration || a.duration), cuts: c.cuts || [], avoid: (v.avoid || []).filter(x => x && x.to > x.from),
-        usable: usableOf(c), weakStart: v.weakStartReason || "", weakEnd: v.weakEndReason || "", room: v.room || v.roomType || "", category: v.category || "" }; }
+        usable: usableOf(c), weakStart: v.weakStartReason || "", weakEnd: v.weakEndReason || "", room: v.room || v.roomType || "", category: v.category || "", weight: clipWeight(c.visual) }; }
     return { clips, music: mi, style, musicUrl: S.assets.find(x => x.id === sel.music).url };
+  }
+  function checkPick(pick, mi) {
+    const bars = mi.bars.map(b => b.t); let start = +pick.start, len = +pick.length; const notes = [];
+    if (!isFinite(start)) { start = bars[0] ?? 0; notes.push("Kein gültiger Start, nehme den ersten Takt."); }
+    const nb = nearest(bars, start); if (Math.abs(nb - start) > 1e-3) { notes.push(`Start ${start.toFixed(2)}s auf Taktanfang ${nb.toFixed(2)}s gesetzt.`); start = nb; }
+    if (!isFinite(len)) len = 28;
+    const L = Math.max(22.5, Math.min(45, len, mi.duration - start)); if (Math.abs(L - len) > 1e-3) notes.push(`Länge ${len.toFixed(2)}s auf ${L.toFixed(2)}s begrenzt.`);
+    return { ...pick, start: r4(start), length: r4(snap(L)), notes };
   }
   async function runDirector(regen) {
     const sel = selection(), style = styleNow(), sig = sigOf(sel);
     S.busy = true; updateButtons();
     try {
       await ensureClipAnalysis(sel.clips, false);
+      const W = weighting(sel);
+      log(`Phase 2/4 · Gewichtung: ${W.rows.slice(0, 4).map(r => `${r.room} ${r.w?.relevance ?? "?"}`).join(", ")} … · starkes Material ≈ ${W.strongSeconds}s`, "ok");
       const mdoc = await ensureMusicAnalysis(sel.music, false);
-      const mi = musicIndex(mdoc.map), ctx = ctxFor(sel, mi, style);
+      const mi = musicIndex(mdoc.map), ctx = ctxFor(sel, mi, style), musicName = S.assets.find(a => a.id === sel.music)?.filename || "music";
+      log("Phase 3/4 · Claude wählt den Musikabschnitt und die Länge …");
+      const pick = checkPick(await S.sample.json(musicPickPrompt(style, mi, W, musicName), { modelTier: "complex", cache: false }), mi);
+      if (pick.length < 22.5) throw new Error(`Ab ${pick.start.toFixed(2)}s bleiben nur ${(mi.duration - pick.start).toFixed(1)}s Musik, zu kurz für mindestens 23s. Bitte Plan neu erzeugen.`);
+      pick.notes.forEach(n => log(n, "warn"));
+      log(`Musik ab ${pick.start.toFixed(2)}s, ${pick.length.toFixed(2)}s am Stück.`, "ok");
+      Object.assign(ctx, { targetLength: pick.length, lengthReason: pick.lengthReason, strongSeconds: W.strongSeconds });
       const prev = previousSummary(sig, style);
-      if (regen && !prev.length) log("Kein vorheriger Plan für diese Auswahl, erstelle den ersten.", "warn");
-      const prompt = directorPrompt(sel, style, mi, prev, S.assets.find(a => a.id === sel.music)?.filename || "music");
-      log(`Director plant (${style}${prev.length ? `, ${prev.length} frühere Pläne als Abgrenzung` : ""}) …`);
-      let plan = await S.sample.json(prompt, { modelTier: "complex", cache: false });
+      const prompt = directorPrompt(sel, style, mi, prev, musicName, pick, W);
+      log(`Phase 4/4 · Director plant den Edit (${style}${prev.length ? `, ${prev.length} frühere Pläne nur als Referenz` : ""}) …`);
+      const withMusic = pl => ({ ...pl, music: { ...(pl.music || {}), start: pick.start, startReason: pick.startReason } });
+      let plan = withMusic(await S.sample.json(prompt, { modelTier: "complex", cache: false }));
       let v = validatePlan(plan, ctx);
       if (v.errors.length) {
         log(`Validator: ${v.errors.length} Fehler, Director korrigiert …`, "warn");
         const fix = `${prompt}\n\nYOUR PREVIOUS ANSWER:\n${JSON.stringify(plan)}\n\nTHE VALIDATOR FOUND THESE ERRORS:\n- ${v.errors.join("\n- ")}${v.warnings.length ? `\n\nAND THESE HINTS (fix them too where it improves the film):\n- ${v.warnings.join("\n- ")}` : ""}\n\nReturn the complete corrected plan JSON. Keep your concept and creative intent; change only what the errors require.`;
-        plan = await S.sample.json(fix, { modelTier: "complex", cache: false });
+        plan = withMusic(await S.sample.json(fix, { modelTier: "complex", cache: false }));
         v = validatePlan(plan, ctx);
       }
       const edit = v.errors.length ? null : buildEdit(v, ctx);
       const number = S.plans.filter(p => p.signature === sig).length + 1;
       const id = "p" + Date.now();
       const doc = { createdAt: new Date().toISOString(), number, style, signature: sig, selection: sel, regen: !!regen,
-        plan, validation: { errors: v.errors, warnings: v.warnings, info: v.info, total: v.total, music: v.music,
+        plan: { ...plan, musicAnalysis: pick.musicAnalysis }, musicPick: { start: pick.start, length: pick.length, startReason: pick.startReason || "", lengthReason: pick.lengthReason || "", keyMoments: pick.keyMoments || [] },
+        validation: { errors: v.errors, warnings: v.warnings, info: v.info, total: v.total, music: v.music, screen: v.screen, strongSeconds: W.strongSeconds,
           shots: v.shots.map(s => ({ n: s.n, clip: s.clip, filename: s.filename, sourceIn: s.sourceIn, sourceOut: s.sourceOut, start: s.start, end: s.end, length: s.length, speed: s.speed, transitionIn: s.transitionIn, transitionDuration: s.transitionDuration, fadeOut: s.fadeOut || 0, role: s.role, reason: s.reason, transitionReason: s.transitionReason || "", reuseReason: s.reuseReason || "" })),
-          clips: sel.clips.map(id => { const c = S.clipA[id] || {}, vv = c.visual || {}, dp = (plan.clips || []).find(x => x.clip === id) || {};
-            return { clip: id, filename: S.assets.find(a => a.id === id)?.filename, room: vv.room || "", roomType: vv.roomType || "", category: vv.category || "", importance: dp.importance ?? vv.importance ?? null,
-              usable: usableOf(c), strongest: vv.strongestStart != null ? [vv.strongestStart, vv.strongestEnd] : null, weakStartReason: vv.weakStartReason || "", weakEndReason: vv.weakEndReason || "",
+          clips: W.rows.map(r => { const c = S.clipA[r.id] || {}, vv = c.visual || {}, dp = (plan.clips || []).find(x => x.clip === r.id) || {};
+            return { clip: r.id, filename: r.file, rank: r.rank, room: vv.room || "", roomType: vv.roomType || "", category: vv.category || "", weight: r.w,
+              usable: r.usable, strongest: vv.strongestStart != null ? [vv.strongestStart, vv.strongestEnd] : null, weakStartReason: vv.weakStartReason || "", weakEndReason: vv.weakEndReason || "",
               recommendedUsage: vv.recommendedUsage || "", plannedUsage: dp.plannedUsage || "", weaknesses: vv.weaknesses || [] }; }) },
         edit, render: null };
       await S.db.collection("plans").doc(id).set(doc);
@@ -843,12 +973,20 @@ Return JSON only:
     $("pv-issues").innerHTML = [...(v.errors || []).map(x => `<li class="e">Fehler: ${esc(x)}</li>`), ...(v.warnings || []).map(x => `<li class="w">Hinweis: ${esc(x)}</li>`), ...(v.info || []).map(x => `<li class="muted">${esc(x)}</li>`)].join("");
     $("pv-shots").innerHTML = (v.shots || []).map(s => `<tr><td class="mono">${s.n}</td><td>${esc(s.filename || s.clip)}</td><td class="mono">${s.sourceIn.toFixed(2)}s</td><td class="mono">${s.sourceOut.toFixed(2)}s</td><td class="mono">${tc(s.start)}</td><td class="mono">${tc(s.end)}</td><td class="mono">${esc(speedLabel(s.speed))}</td><td class="small">${esc(s.transitionIn === "cut" ? "Cut" : `${s.transitionIn} ${s.transitionDuration}s`)}${s.fadeOut ? ` · fadeOut ${s.fadeOut}s` : ""}${s.transitionReason ? `<div class="muted">${esc(s.transitionReason)}</div>` : ""}</td><td><span class="role" style="background:${roleColor(s.role)}">${esc(s.role || "–")}</span></td><td class="reason small">${esc(s.reason || "")}${s.reuseReason ? `<div class="muted">Mehrfachnutzung: ${esc(s.reuseReason)}</div>` : ""}</td></tr>`).join("");
     const rng = r => r && r[0] != null && r[1] != null ? `${(+r[0]).toFixed(2)}–${(+r[1]).toFixed(2)}s` : "–";
-    $("pv-cliptable").innerHTML = (v.clips || []).map(c => { const uses = (v.shots || []).filter(x => x.clip === c.clip);
+    const T0 = v.total || 1, sec = id => (v.shots || []).filter(x => x.clip === id).reduce((acc, x) => acc + x.length, 0);
+    $("pv-cliptable").innerHTML = (v.clips || []).map(c => { const uses = (v.shots || []).filter(x => x.clip === c.clip), w = c.weight;
       const weak = [c.weakStartReason && `Anfang: ${c.weakStartReason}`, c.weakEndReason && `Ende: ${c.weakEndReason}`, ...(c.weaknesses || [])].filter(Boolean);
-      return `<tr><td>${esc(c.filename || c.clip)}</td><td class="small">${esc(c.room || c.roomType || "–")}${c.category ? `<div class="muted">${esc(c.roomType)} · ${esc(c.category)}</div>` : ""}</td><td class="mono">${c.importance ?? "–"}</td><td class="mono">${rng(c.usable)}</td><td class="mono">${rng(c.strongest)}</td><td class="small">${esc(c.recommendedUsage || "–")}${c.plannedUsage ? `<div class="muted">Plan: ${esc(c.plannedUsage)}</div>` : ""}</td><td class="small reason">${esc(weak.join(" · ") || "–")}</td><td class="small mono">${uses.length ? uses.map(x => `#${x.n} ${x.sourceIn.toFixed(2)}–${x.sourceOut.toFixed(2)}s`).join("<br>") : "ausgelassen"}</td></tr>`; }).join("")
-      || `<tr><td colspan="8" class="muted small">Für diesen Plan liegt keine erweiterte Clip-Analyse vor (älterer Plan).</td></tr>`;
+      const t = sec(c.clip), over = w?.maxT != null && t > w.maxT + (w.lowRelevance ? 0.3 : 1.0);
+      return `<tr${uses.length ? "" : ' class="muted"'}><td class="mono">${c.rank ?? "–"}</td><td>${esc(c.filename || c.clip)}</td><td class="small">${esc(c.room || c.roomType || "–")}${c.roomType ? `<div class="muted">${esc(c.roomType)}${w?.lowRelevance ? " · wenig relevant" : ""}</div>` : ""}</td>`
+        + `<td class="mono">${w ? `${w.propertyImportance} · ${w.viewerInterest} · ${w.visualStrength}<div class="muted">= ${w.relevance}</div>` : (c.importance ?? "–")}</td><td class="small">${w ? `${w.hero ? "Hero" : "–"} / ${w.secondary ? "Neben" : "Haupt"}` : "–"}</td>`
+        + `<td class="mono">${rng(c.usable)}</td><td class="mono">${rng(c.strongest)}</td><td class="mono">${w && w.maxT != null ? `${w.minT ?? 0}–${w.maxT}s` : "–"}</td>`
+        + `<td class="small">${esc(w?.preferredRole || c.recommendedUsage || "–")}${c.plannedUsage ? `<div class="muted">Plan: ${esc(c.plannedUsage)}</div>` : ""}</td><td class="small reason">${esc(weak.join(" · ") || "–")}</td>`
+        + `<td class="small mono">${uses.length ? `<b${over ? ' style="color:var(--bad)"' : ""}>${t.toFixed(2)}s · ${(t / T0 * 100).toFixed(0)}%</b><br>` + uses.map(x => `#${x.n} ${x.sourceIn.toFixed(2)}–${x.sourceOut.toFixed(2)}s`).join("<br>") : "ausgelassen"}</td></tr>`; }).join("")
+      || `<tr><td colspan="11" class="muted small">Für diesen Plan liegt keine erweiterte Clip-Analyse vor (älterer Plan).</td></tr>`;
+    const sc = v.screen;
+    $("pv-screen").textContent = sc ? `Hauptbereiche (Relevanz ≥ 8): ${sc.mainSeconds.toFixed(1)}s (${(sc.mainSeconds / T0 * 100).toFixed(0)}%) · Nebenräume / wenig relevant: ${sc.lowRelevanceSeconds.toFixed(1)}s (${(sc.lowRelevanceSeconds / T0 * 100).toFixed(0)}%) · starkes Material ≈ ${v.strongSeconds ?? "–"}s · Werte: propertyImportance · viewerInterest · visualStrength (1–10)` : "";
     const mname = S.assets.find(a => a.id === p.selection?.music)?.filename || "–", mu = v.music || {};
-    $("pv-music-pick").innerHTML = mu.start != null ? `<div><dt>Musiktrack</dt><dd>${esc(mname)}</dd></div><div><dt>Musik-Start</dt><dd class="mono">${mu.start.toFixed(2)}s</dd></div><div><dt>Musik-Ende</dt><dd class="mono">${mu.end.toFixed(2)}s</dd></div><div><dt>Am Stück</dt><dd>${(mu.end - mu.start).toFixed(2)}s, ohne Schnitt</dd></div>${mu.reason ? `<div class="why"><dt>Warum dieser Start</dt><dd>${esc(mu.reason)}</dd></div>` : ""}` : "";
+    $("pv-music-pick").innerHTML = mu.start != null ? `<div><dt>Musiktrack</dt><dd>${esc(mname)}</dd></div><div><dt>Musik-Start</dt><dd class="mono">${mu.start.toFixed(2)}s</dd></div><div><dt>Musik-Ende</dt><dd class="mono">${mu.end.toFixed(2)}s</dd></div><div><dt>Am Stück</dt><dd>${(mu.end - mu.start).toFixed(2)}s, ohne Schnitt</dd></div>${mu.reason ? `<div class="why"><dt>Warum dieser Start</dt><dd>${esc(mu.reason)}</dd></div>` : ""}${p.musicPick?.lengthReason ? `<div class="why"><dt>Warum diese Länge</dt><dd>${esc(p.musicPick.lengthReason)}</dd></div>` : ""}` : "";
     $("pv-music-edit").textContent = segs.length === 1 ? `Musik läuft durchgehend von ${segs[0].trackStart.toFixed(2)}s bis ${segs[0].trackEnd.toFixed(2)}s im Track · Fade-in ${v.music.fadeIn}s, Fade-out ${v.music.fadeOut}s · Timecode mm:ss:frames bei 24 fps` : segs.length ? "Musik (alter Plan mit Musikschnitten): " + segs.map((g, i) => `Segment ${i + 1}: Track ${g.trackStart.toFixed(2)}–${g.trackEnd.toFixed(2)}s`).join(" · ") + ` · Fade-in ${v.music.fadeIn}s, Fade-out ${v.music.fadeOut}s · Timecode mm:ss:frames bei 24 fps` : "";
     $("pv-omitted").textContent = (pl.omitted || []).length ? "Ausgelassen: " + pl.omitted.map(o => `${S.assets.find(a => a.id === o.clip)?.filename || o.clip} (${o.reason})`).join(" · ") : "";
     renderPlanList(); showRender(p);
