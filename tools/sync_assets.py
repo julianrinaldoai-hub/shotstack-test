@@ -16,18 +16,19 @@ AUDIO_EXT = {"mp3", "wav", "m4a", "aac", "ogg", "flac"}
 
 
 def fetch(url):
-    out = subprocess.run(["curl", "-sS", "-H", "Accept: application/json", url],
+    out = subprocess.run(["curl", "-sS", "-g", "-m", "30", "-H", "Accept: application/json", url],
                          capture_output=True, text=True, check=True).stdout
     return json.loads(out)
 
 
 def main():
-    items, url = [], API
-    while url:
+    items, url, seen = [], API, set()
+    while url and url not in seen:
+        seen.add(url)
         page = fetch(url)
         items += page.get("data") or []
-        nxt = (page.get("meta") or {}).get("next")
-        url = nxt if nxt and nxt.startswith("http") else (API + "?next=" + nxt if nxt else None)
+        # the API pages by 30 and links the next page as page[next]=<cursor>
+        url = (page.get("links") or {}).get("next")
 
     # uploads made through signed URLs carry no filename: recover it from local manifests
     known = {}
