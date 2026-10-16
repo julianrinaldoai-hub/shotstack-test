@@ -1,0 +1,722 @@
+<title>Clip-Gewichtung</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working column like an appraisal file: set bar, upload tray, run log, ranking summary, then one appraisal card per clip in rank order */
+:root {
+  --bg: #edf0f3; --panel: #ffffff; --ink: #14202b; --muted: #586774; --line: #d3dbe2; --soft: #e4eaf0;
+  --accent: #1d5a86; --accent-ink: #ffffff; --ok: #1d7a45; --warn: #8f6200; --bad: #b3261e;
+  /* priority classes in the colours of a building energy label: A best, E avoid (same in both themes) */
+  --cA: #12823b; --cB: #6ea92f; --cC: #e2b31a; --cD: #e57d22; --cE: #c7372b; --chip-dark: #14202b; --chip-light: #ffffff;
+  --seg-good: #3f9a62; --seg-best: #1d5a86; --seg-weak: #d98a2b; --seg-bad: #c7372b; --seg-neutral: #9aa8b4;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151b; --panel: #172029; --ink: #e3e9ee; --muted: #93a2ae; --line: #2a3640; --soft: #1e2a34;
+  --accent: #6aaee0; --accent-ink: #0f151b; --ok: #5cc98a; --warn: #e0b04a; --bad: #f07a6e; --seg-neutral: #5d6c78; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f151b; --panel: #172029; --ink: #e3e9ee; --muted: #93a2ae; --line: #2a3640; --soft: #1e2a34;
+  --accent: #6aaee0; --accent-ink: #0f151b; --ok: #5cc98a; --warn: #e0b04a; --bad: #f07a6e; --seg-neutral: #5d6c78; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 20px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 1.75rem; font-weight: 800; }
+h2 { font-size: 1.15rem; font-weight: 700; }
+h3 { font-size: 0.95rem; font-weight: 700; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+button, select { font: inherit; }
+button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:focus-visible, select:focus-visible, .drop:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.danger { color: var(--bad); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+select { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 6px 10px; }
+
+header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+header.top .lead { max-width: 62ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.78rem; background: var(--panel); white-space: nowrap; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--seg-neutral); }
+.chip.on i { background: var(--ok); } .chip.off i { background: var(--bad); }
+
+section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.row.between { justify-content: space-between; }
+.notice { border-left: 3px solid var(--warn); padding: 8px 12px; background: var(--soft); border-radius: 0 8px 8px 0; font-size: 0.88rem; }
+
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 22px; text-align: center; cursor: pointer; display: grid; gap: 4px; }
+.drop.over { border-color: var(--accent); background: var(--soft); }
+.drop strong { font-family: var(--f-display); font-size: 1.05rem; }
+.tray { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.tile { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: grid; background: var(--bg); min-width: 0; }
+.tile video { width: 100%; aspect-ratio: 16 / 9; background: #000; display: block; max-width: 100%; }
+.tile .meta { padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.tile .name { font-weight: 600; overflow-wrap: anywhere; }
+.tile .acts { display: flex; gap: 6px; padding: 0 10px 10px; flex-wrap: wrap; }
+.tile .acts button { padding: 4px 10px; font-size: 0.8rem; }
+
+.log { font-family: var(--f-mono); font-size: 0.78rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 190px; overflow: auto; white-space: pre-wrap; }
+.log .ok { color: var(--ok); } .log .warn { color: var(--warn); } .log .bad { color: var(--bad); }
+
+.cls { display: inline-grid; place-items: center; min-width: 30px; height: 26px; padding: 0 8px; border-radius: 6px 13px 13px 6px; font-family: var(--f-display); font-weight: 800; font-size: 0.95rem; }
+.cls.A { background: var(--cA); color: var(--chip-light); } .cls.B { background: var(--cB); color: var(--chip-dark); }
+.cls.C { background: var(--cC); color: var(--chip-dark); } .cls.D { background: var(--cD); color: var(--chip-dark); }
+.cls.E { background: var(--cE); color: var(--chip-light); } .cls.none { background: var(--soft); color: var(--muted); }
+
+.summary { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 760px) { .summary { grid-template-columns: minmax(0, 1fr); } }
+.rank { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rank li { display: grid; grid-template-columns: 26px auto minmax(0, 1fr) 44px; gap: 10px; align-items: center; }
+.rank .n { font-family: var(--f-mono); color: var(--muted); text-align: right; }
+.rank .who { min-width: 0; display: grid; gap: 3px; }
+.rank .who b { font-weight: 600; overflow-wrap: anywhere; }
+.bar { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--accent); }
+.rank .score { font-family: var(--f-mono); font-weight: 500; text-align: right; }
+.groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.group { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; align-content: start; }
+.group ul { margin: 0; padding-left: 18px; font-size: 0.88rem; }
+.overview p + p { margin-top: 6px; }
+
+.cards { display: grid; gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.card > *, section.panel > *, .wrap > *, .cards > * { min-width: 0; }
+.card-head { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 16px; }
+@media (max-width: 620px) { .card-head { grid-template-columns: minmax(0, 1fr); } }
+.card-head img, .card-head .ph { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: var(--soft); max-width: 100%; }
+.titleline { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.titleline h2 { overflow-wrap: anywhere; }
+.pill { font-size: 0.75rem; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); white-space: nowrap; }
+.pill.hero { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.pill.stale { border-color: var(--warn); color: var(--warn); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.metric { background: var(--bg); border-radius: 8px; padding: 7px 10px; display: grid; gap: 1px; }
+.metric .v { font-family: var(--f-mono); font-size: 1.05rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.metric .v small { color: var(--muted); font-size: 0.72rem; }
+.timebar { position: relative; height: 54px; }
+.timebar .track { position: absolute; left: 0; right: 0; top: 14px; height: 16px; background: var(--soft); border-radius: 4px; overflow: hidden; }
+.timebar .seg { position: absolute; top: 0; bottom: 0; opacity: 0.85; }
+.timebar .rng { position: absolute; height: 4px; border-radius: 2px; }
+.timebar .rng.use { top: 34px; background: var(--seg-good); }
+.timebar .rng.best { top: 40px; background: var(--seg-best); }
+.timebar .tick { position: absolute; top: 0; font-family: var(--f-mono); font-size: 0.66rem; color: var(--muted); transform: translateX(-50%); }
+.timebar .fr { position: absolute; top: 31px; width: 1px; height: 3px; background: var(--muted); }
+.timebar .fr.miss { background: var(--bad); height: 6px; width: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.75rem; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+dl.facts { margin: 0; display: grid; grid-template-columns: minmax(150px, 210px) minmax(0, 1fr); gap: 6px 16px; }
+@media (max-width: 620px) { dl.facts { grid-template-columns: minmax(0, 1fr); } dl.facts dd { margin-bottom: 6px; } }
+dl.facts dt { color: var(--muted); font-size: 0.85rem; }
+dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.issues { margin: 0; padding-left: 18px; }
+.issues li span { font-family: var(--f-mono); font-size: 0.8rem; color: var(--muted); }
+.relative { border-left: 3px solid var(--accent); padding: 6px 12px; background: var(--bg); border-radius: 0 8px 8px 0; display: grid; gap: 4px; font-size: 0.9rem; }
+.checks { margin: 0; padding-left: 18px; color: var(--warn); font-size: 0.88rem; }
+details { border-top: 1px solid var(--line); padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+.segs { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; }
+.segs li { display: grid; grid-template-columns: 96px 12px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 0.88rem; }
+.segs li i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 4px; }
+.strip figure { margin: 0; flex: 0 0 150px; display: grid; gap: 4px; }
+.strip img, .strip .ph { width: 150px; height: 84px; object-fit: cover; border-radius: 6px; background: var(--soft); display: grid; place-items: center; font-size: 0.75rem; color: var(--bad); }
+.strip figcaption { font-size: 0.75rem; line-height: 1.35; }
+.strip figcaption b { font-family: var(--f-mono); font-weight: 500; }
+.debug { display: grid; grid-template-columns: minmax(150px, 210px) minmax(0, 1fr); gap: 4px 16px; font-size: 0.84rem; margin-top: 10px; }
+@media (max-width: 620px) { .debug { grid-template-columns: minmax(0, 1fr); } }
+.empty { text-align: center; padding: 26px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="lead">
+      <h1>Clip-Gewichtung</h1>
+      <p class="muted">Testlabor: Wie gut versteht Claude einzelne Immobilienclips? Hochladen, analysieren, vergleichen. Kein Schnitt, keine Musik, kein Render.</p>
+    </div>
+    <div class="chips" aria-label="Verfügbarkeit">
+      <span class="chip" id="cap-db"><i></i>Speicher</span>
+      <span class="chip" id="cap-assets"><i></i>Videoablage</span>
+      <span class="chip" id="cap-sample"><i></i>Claude</span>
+    </div>
+  </header>
+  <div class="notice" id="nocaps" hidden></div>
+
+  <section class="panel" aria-labelledby="h-upload">
+    <div class="row between">
+      <h2 id="h-upload">1 · Upload</h2>
+      <div class="row">
+        <label for="set-select" class="small muted">Set (eine Immobilie)</label>
+        <select id="set-select"></select>
+        <button id="btn-newset">Neues Set</button>
+      </div>
+    </div>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-describedby="drop-hint">
+      <strong>MP4-Clips hierher ziehen</strong>
+      <span class="muted small" id="drop-hint">oder klicken und mehrere Dateien auswählen. Clips bis 20 MB werden für spätere Besuche gespeichert.</span>
+      <input type="file" id="file-input" accept="video/mp4,video/*" multiple hidden>
+    </div>
+    <div class="tray" id="tray"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-analyze">
+    <div class="row between">
+      <h2 id="h-analyze">2 · Analyze</h2>
+      <div class="row">
+        <button class="primary" id="btn-analyze">Analyze Clips</button>
+        <button id="btn-reall">Re-analyze all</button>
+        <button id="btn-compare">Vergleich neu</button>
+      </div>
+    </div>
+    <p class="small muted">Phase 1 prüft jeden Clip einzeln: ein Frame alle 0,25 s über die ganze Dauer, dazu Bewegung, Detail und Flackern aus dem Browser. Phase 2 vergleicht danach alle Clips des Sets und legt erst dann die finalen Gewichte fest. Bereits analysierte Clips kommen aus dem Speicher.</p>
+    <div class="log" id="log" aria-live="polite">Bereit.</div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-results">
+    <div class="row between">
+      <h2 id="h-results">3 · Results</h2>
+      <span class="small muted" id="cmp-meta"></span>
+    </div>
+    <div id="summary"></div>
+    <div class="cards" id="cards"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ---------- constants & helpers ----------
+  const STEP = 0.25;             // frame spacing sent to Claude
+  const GRAY_STEP = 1 / 12;      // dense sampling for motion / detail / flicker measurements
+  const TIER = "complex";
+  const SECONDARY_ROOMS = new Set(["bathroom", "wc", "hallway", "gym", "dressing room", "storage", "technical", "side room"]);
+  const GROUPS = [["PRIMARY", ["A", "B"], "Hero und starke Unterstützung"], ["SECONDARY", ["C"], "zeigen, aber kürzer"], ["OPTIONAL", ["D"], "nur wenn es passt"], ["AVOID", ["E"], "eher weglassen"]];
+  const SEG = { slow_start: "weak", good: "good", stable: "good", good_motion: "best", strong: "best", best_composition: "best", approaching: "weak", dominant_object: "weak", too_close: "bad", unstable: "bad", ai_artifact: "bad", weak_framing: "weak", unusable: "bad", other: "neutral" };
+  const SEG_DE = { slow_start: "langsamer Start", good: "gut", stable: "stabil", good_motion: "Bewegung wirkt gut", strong: "stark", best_composition: "beste Komposition", approaching: "Kamera nähert sich", dominant_object: "Objekt zu dominant", too_close: "zu nah", unstable: "unruhig", ai_artifact: "AI-Artefakt", weak_framing: "schwacher Bildausschnitt", unusable: "ungeeignet", other: "sonstiges" };
+  const ISSUE_DE = { warped_geometry: "verzerrte Geometrie", bending_walls: "biegende Wände", morphing_furniture: "morphende Möbel", disappearing_objects: "verschwindende Objekte", unstable_textures: "instabile Texturen", flicker: "Flackern", excessive_blur: "starke Unschärfe", unnatural_acceleration: "unnatürliche Beschleunigung", slow_start: "langsamer Start", abrupt_movement: "abrupte Bewegung", camera_too_close: "Kamera zu nah", bad_final_framing: "schlechter Schlussframe", distorted_architecture: "verzerrte Architektur", other_ai_artifact: "anderes AI-Artefakt" };
+  const ROOM_DE = { exterior: "Außenansicht", building: "Gebäude", "living room": "Wohnzimmer", "living/dining": "Wohn-/Essbereich", kitchen: "Küche", dining: "Essbereich", bedroom: "Schlafzimmer", bathroom: "Badezimmer", wc: "WC", terrace: "Terrasse", balcony: "Balkon", garden: "Garten", pool: "Pool", view: "Aussicht", hallway: "Flur", gym: "Gym", "dressing room": "Ankleide", storage: "Abstellraum", detail: "Detail", other: "Sonstiges",
+    interior: "Innenraum", "outdoor area": "Außenbereich" };
+  const de = x => ROOM_DE[String(x || "").toLowerCase()] || x || "";
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const num = (x, d = 1) => (x == null || x === "" || !isFinite(+x)) ? "–" : (+x).toFixed(d);
+  const sec = x => (x == null || !isFinite(+x)) ? "–" : `${(+x).toFixed(2)}s`;
+  const rng = (a, b) => (a == null || b == null) ? "–" : `${(+a).toFixed(2)}–${(+b).toFixed(2)}s`;
+  const r2 = x => Math.round(x * 100) / 100;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const fmtDate = iso => { try { return new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); } catch { return iso || ""; } };
+  const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const log = (msg, cls) => { const el = $("log"); if (el.textContent === "Bereit.") el.textContent = ""; const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = `${new Date().toLocaleTimeString("de-DE")}  ${msg}`; el.appendChild(d); el.scrollTop = el.scrollHeight; };
+  const sampleMsg = e => ({ not_granted: "Claude-Zugriff wurde nicht erlaubt.", rate_limited: "Claude ist gerade ausgelastet, bitte gleich noch einmal versuchen.", prompt_too_large: "Die Anfrage ist zu groß.", invalid_json: "Claude hat kein gültiges JSON geliefert." }[e?.code] || `Claude-Aufruf fehlgeschlagen (${e?.code || "unbekannt"}): ${e?.message || e}`);
+
+  // ---------- state ----------
+  const S = { db: null, assets: null, sample: null, maxImg: 0, sets: [], setId: null, clips: [], analyses: {}, frames: {}, comparisons: [], local: {}, view: {}, busy: false, unsub: [], confirmDel: null };
+  const byVersion = (a, b) => a.version - b.version;
+  const latest = id => (S.analyses[id] || []).filter(a => a.result).slice(-1)[0] || null;
+  const shown = id => (S.analyses[id] || []).find(a => a.id === S.view[id]) || latest(id);
+  const srcOf = c => S.local[c.id] || (c.assetId ? "/_blob/" + c.assetId : null);
+  const currentCmp = () => S.comparisons.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0] || null;
+  const cmpFresh = cmp => cmp && S.clips.every(c => !latest(c.id) || cmp.analysisIds?.[c.id] === latest(c.id).id) && Object.keys(cmp.analysisIds || {}).every(id => S.clips.some(c => c.id === id));
+
+  // ---------- storage (db when available, memory otherwise) ----------
+  async function put(col, doc) {
+    const { id, ...data } = doc;
+    if (col === "clips") { const i = S.clips.findIndex(x => x.id === id); i >= 0 ? S.clips[i] = doc : S.clips.push(doc); }
+    if (col === "analyses") { const l = (S.analyses[doc.clipId] ||= []); const i = l.findIndex(x => x.id === id); i >= 0 ? l[i] = doc : l.push(doc); l.sort(byVersion); }
+    if (col === "frames") S.frames[id] = doc;
+    if (col === "comparisons") { const i = S.comparisons.findIndex(x => x.id === id); i >= 0 ? S.comparisons[i] = doc : S.comparisons.push(doc); }
+    if (col === "sets") { const i = S.sets.findIndex(x => x.id === id); i >= 0 ? S.sets[i] = doc : S.sets.push(doc); }
+    if (S.db) await S.db.collection(col).doc(id).set(data);
+    render();
+  }
+  async function del(col, id) { if (S.db) { try { await S.db.collection(col).doc(id).delete(); } catch (e) { log(`Löschen von ${col}/${id} fehlgeschlagen: ${e?.message || e}`, "warn"); } } }
+  const docsOf = qs => qs.docs.map(d => ({ id: d.id, ...d.data() }));
+  function subscribeSet() {
+    S.unsub.forEach(u => { try { u(); } catch {} }); S.unsub = [];
+    S.clips = []; S.analyses = {}; S.frames = {}; S.comparisons = []; S.view = {};
+    if (!S.db || !S.setId) { render(); return; }
+    const q = col => S.db.collection(col).where("setId", "==", S.setId);
+    S.unsub.push(q("clips").onSnapshot(qs => { S.clips = docsOf(qs).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)); render(); }, e => log("Clips laden fehlgeschlagen: " + (e?.message || e), "bad")));
+    S.unsub.push(q("analyses").onSnapshot(qs => { const m = {}; for (const a of docsOf(qs)) (m[a.clipId] ||= []).push(a); Object.values(m).forEach(l => l.sort(byVersion)); S.analyses = m; render(); }));
+    S.unsub.push(q("frames").onSnapshot(qs => { S.frames = Object.fromEntries(docsOf(qs).map(f => [f.id, f])); render(); }));
+    S.unsub.push(q("comparisons").onSnapshot(qs => { S.comparisons = docsOf(qs); render(); }));
+  }
+  async function ensureSet() {
+    if (S.setId) return S.setId;
+    const id = uid("s"); await put("sets", { id, name: `Set ${S.sets.length + 1}`, createdAt: new Date().toISOString() });
+    selectSet(id); return id;
+  }
+  function selectSet(id) { S.setId = id; try { localStorage.setItem("clipSet", id); } catch {} subscribeSet(); renderSets(); }
+
+  // ---------- boot ----------
+  function setCap(id, ok, label) { const el = $(id); el.className = "chip " + (ok ? "on" : "off"); el.lastChild.textContent = label; }
+  async function boot() {
+    const use = n => (window.claude?.use ? window.claude.use(n).catch(() => null) : Promise.resolve(null));
+    [S.db, S.assets, S.sample] = await Promise.all([use("db"), use("assets"), use("sample")]);
+    setCap("cap-db", !!S.db, S.db ? "Speicher" : "Speicher fehlt"); setCap("cap-assets", !!S.assets, S.assets ? "Videoablage" : "Videoablage fehlt"); setCap("cap-sample", !!S.sample, S.sample ? "Claude" : "Claude fehlt");
+    if (S.sample) { const lim = await S.sample.limits().catch(() => null); S.maxImg = lim?.images?.maxCount || 0; }
+    const miss = [];
+    if (!S.sample || !S.maxImg) miss.push("Claude mit Bildern ist hier nicht verfügbar, die Analyse kann nicht laufen. Öffne die Seite in claude.ai.");
+    if (!S.db) miss.push("Ohne Speicher gehen Ergebnisse beim Neuladen verloren.");
+    if (!S.assets) miss.push("Ohne Videoablage müssen Clips nach dem Neuladen erneut hochgeladen werden.");
+    if (miss.length) { $("nocaps").hidden = false; $("nocaps").textContent = miss.join(" "); }
+    if (S.db) {
+      S.db.collection("sets").onSnapshot(qs => {
+        S.sets = docsOf(qs).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+        if (!S.setId) { let saved = null; try { saved = localStorage.getItem("clipSet"); } catch {} const pick = S.sets.find(s => s.id === saved) || S.sets[S.sets.length - 1]; if (pick) selectSet(pick.id); }
+        renderSets();
+      });
+    }
+    render();
+  }
+
+  // ---------- upload ----------
+  const drop = $("drop"), input = $("file-input");
+  drop.addEventListener("click", () => input.click());
+  drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); addFiles([...e.dataTransfer.files]); });
+  input.addEventListener("change", () => { addFiles([...input.files]); input.value = ""; });
+  function once(el, ev, ms) { return new Promise((res, rej) => { const to = setTimeout(() => rej(new Error(ev + " Zeitüberschreitung")), ms); el.addEventListener(ev, () => { clearTimeout(to); res(); }, { once: true }); el.addEventListener("error", () => { clearTimeout(to); rej(new Error("Video konnte nicht geladen werden")); }, { once: true }); }); }
+  async function probe(url) {
+    const v = document.createElement("video"); v.preload = "metadata"; v.muted = true; v.src = url;
+    try { await once(v, "loadedmetadata", 15000); return { duration: r2(v.duration), width: v.videoWidth, height: v.videoHeight }; }
+    catch { return { duration: null, width: null, height: null }; } finally { v.removeAttribute("src"); v.load(); }
+  }
+  async function addFiles(files) {
+    const vids = files.filter(f => /^video\//.test(f.type) || /\.(mp4|m4v|mov|webm)$/i.test(f.name));
+    if (!vids.length) { log("Keine Videodatei erkannt. Bitte MP4-Clips wählen.", "warn"); return; }
+    const setId = await ensureSet();
+    for (const f of vids) {
+      const id = uid("c"), url = URL.createObjectURL(f); S.local[id] = url;
+      const meta = await probe(url);
+      let assetId = null, note = "";
+      if (S.assets) {
+        log(`${f.name}: wird gespeichert …`);
+        try { assetId = (await S.assets.upload(f, { type: f.type || "video/mp4" })).id; }
+        catch (e) { note = e?.code === "too_large" ? "Größer als 20 MB: nur in dieser Sitzung verfügbar." : `Nicht gespeichert (${e?.code || "Fehler"}): nur in dieser Sitzung verfügbar.`; log(`${f.name}: ${note}`, "warn"); }
+      } else note = "Nur in dieser Sitzung verfügbar.";
+      await put("clips", { id, setId, filename: f.name, size: f.size, type: f.type || "", ...meta, assetId, note, createdAt: new Date().toISOString() });
+      log(`${f.name}: hochgeladen${meta.duration ? `, ${meta.duration.toFixed(2)}s` : ""}.`, "ok");
+    }
+  }
+  async function removeClip(c) {
+    for (const a of S.analyses[c.id] || []) { await del("analyses", a.id); await del("frames", a.id); }
+    await del("clips", c.id);
+    if (c.assetId && S.assets) { try { await S.assets.delete(c.assetId); } catch (e) { log(`${c.filename}: Video konnte nicht gelöscht werden (${e?.code || e}).`, "warn"); } }
+    S.clips = S.clips.filter(x => x.id !== c.id); delete S.analyses[c.id];
+    if (S.local[c.id]) { URL.revokeObjectURL(S.local[c.id]); delete S.local[c.id]; }
+    log(`${c.filename} entfernt.`); render();
+  }
+
+  // ---------- phase 1: measurements in the browser ----------
+  function shiftEstimate(a, b, W, x0, y0, w, h, R) {
+    let best = Infinity, bx = 0, by = 0;
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      let s = 0, n = 0;
+      for (let y = y0 + R; y < y0 + h - R; y++) for (let x = x0 + R; x < x0 + w - R; x++) { s += Math.abs(a[y * W + x] - b[(y + dy) * W + x + dx]); n++; }
+      s /= n; if (s < best) { best = s; bx = dx; by = dy; }
+    }
+    return [bx, by];
+  }
+  function motionWindows(frames, times, W, H, cuts) {
+    const pairs = [];
+    for (let i = 0; i + 2 < frames.length; i++) {
+      if (cuts.some(c => c > times[i] && c < times[i + 2])) continue;
+      const A = frames[i], B = frames[i + 2], hw = W / 2, hh = H / 2;
+      const q = [[0, 0], [hw, 0], [0, hh], [hw, hh]].map(([x, y]) => shiftEstimate(A, B, W, x, y, hw, hh, 4));
+      const dt = times[i + 2] - times[i], dx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, dy = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+      const push = ((q[1][0] + q[3][0]) - (q[0][0] + q[2][0])) / 2 + ((q[2][1] + q[3][1]) - (q[0][1] + q[1][1])) / 2;
+      pairs.push({ t: times[i], dx: dx / W * 100 / dt, dy: dy / H * 100 / dt, push: push / W * 100 / dt });
+    }
+    const end = times[times.length - 1] || 0, out = [];
+    for (let w0 = 0; w0 < end; w0 += 0.5) {
+      const ps = pairs.filter(p => p.t >= w0 && p.t < w0 + 0.5); if (!ps.length) continue;
+      const avg = k => +(ps.reduce((a, p) => a + p[k], 0) / ps.length).toFixed(1);
+      out.push({ from: +w0.toFixed(2), panX: avg("dx"), tiltY: avg("dy"), push: avg("push") });
+    }
+    return out;
+  }
+  async function measure(src, clip) {
+    const v = document.createElement("video");
+    v.crossOrigin = "anonymous"; v.muted = true; v.playsInline = true; v.preload = "auto"; v.src = src;
+    await once(v, "loadeddata", 30000);
+    const dur = v.duration, W = 96, H = 54;
+    const seek = async t => { if (Math.abs(v.currentTime - t) < 1e-3 && v.readyState >= 2) return; v.currentTime = t; await once(v, "seeked", 6000); };
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const cx = cv.getContext("2d", { willReadFrequently: true });
+    const gray = [], gt = [];
+    for (let t = 0.02; t < dur - 0.03; t += GRAY_STEP) {
+      try { await seek(t); } catch { continue; }
+      cx.drawImage(v, 0, 0, W, H);
+      const px = cx.getImageData(0, 0, W, H).data, g = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) g[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+      gray.push(g); gt.push(+t.toFixed(3));
+    }
+    // frame-to-frame change: hard cuts, flicker; gradient: visible detail
+    const diff = [], lum = gray.map(g => g.reduce((a, x) => a + x, 0) / g.length);
+    for (let i = 1; i < gray.length; i++) { let s = 0; for (let k = 0; k < gray[i].length; k++) s += Math.abs(gray[i][k] - gray[i - 1][k]); diff.push(s / gray[i].length); }
+    const med = [...diff].sort((a, b) => a - b)[Math.floor(diff.length / 2)] || 0;
+    const cuts = []; diff.forEach((d, i) => { if (d > Math.max(8, 6 * med)) cuts.push(+((gt[i] + gt[i + 1]) / 2).toFixed(3)); });
+    const grad = gray.map(g => { let s = 0; for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) { const i = y * W + x; s += Math.abs(g[i + 1] - g[i - 1]) + Math.abs(g[i + W] - g[i - W]); } return s / ((W - 2) * (H - 2)); });
+    const gmax = Math.max(...grad, 1e-6), detail = [], flicker = [];
+    for (let t0 = 0; t0 < dur - 0.05; t0 += STEP) {
+      const ix = gt.map((t, i) => t >= t0 && t < t0 + STEP ? i : -1).filter(i => i >= 0); if (!ix.length) continue;
+      detail.push([+t0.toFixed(2), Math.round(ix.reduce((a, i) => a + grad[i], 0) / ix.length / gmax * 100)]);
+      const lj = ix.filter(i => i > 0).map(i => Math.abs(lum[i] - lum[i - 1])); flicker.push([+t0.toFixed(2), lj.length ? +(lj.reduce((a, x) => a + x, 0) / lj.length).toFixed(1) : 0]);
+    }
+    const windows = motionWindows(gray, gt, W, H, cuts);
+    // frames for Claude: every STEP s from the first frame to just before the end
+    const times = []; for (let t = 0.04; t <= dur - 0.06; t += STEP) times.push(+t.toFixed(2));
+    const last = +(dur - 0.05).toFixed(2); if (last - times[times.length - 1] > 0.1) times.push(last);
+    const grid = [[2, 2], [3, 3], [4, 4]].find(([c, r]) => Math.ceil(times.length / (c * r)) <= S.maxImg) || [4, 4];
+    const [cols, rows] = grid, per = cols * rows, SW = 960, SH = 540, tw = SW / cols, th = SH / rows;
+    const sheet = document.createElement("canvas"); sheet.width = SW; sheet.height = SH; const sx = sheet.getContext("2d");
+    const thumb = document.createElement("canvas"); thumb.width = 160; thumb.height = 90; const tx = thumb.getContext("2d");
+    const frames = [], sheets = [];
+    for (let k = 0; k < times.length && sheets.length < Math.max(1, S.maxImg); k += per) {
+      sx.fillStyle = "#000"; sx.fillRect(0, 0, SW, SH);
+      const ts = times.slice(k, k + per);
+      for (let j = 0; j < ts.length; j++) {
+        const x = (j % cols) * tw, y = Math.floor(j / cols) * th; let ok = true;
+        try { await seek(ts[j]); sx.drawImage(v, x, y, tw, th); tx.drawImage(v, 0, 0, 160, 90); }
+        catch { ok = false; sx.fillStyle = "#333"; sx.fillRect(x, y, tw, th); sx.fillStyle = "#fff"; sx.font = "bold 20px sans-serif"; sx.fillText("Frame fehlt", x + 20, y + th / 2); }
+        sx.fillStyle = "rgba(0,0,0,0.72)"; sx.fillRect(x, y, 92, 28); sx.fillStyle = "#fff"; sx.font = "bold 19px sans-serif"; sx.fillText(`${ts[j].toFixed(2)}s`, x + 7, y + 20);
+        sx.strokeStyle = "#000"; sx.lineWidth = 2; sx.strokeRect(x, y, tw, th);
+        frames.push({ t: ts[j], ok, src: ok ? thumb.toDataURL("image/jpeg", 0.62) : null });
+      }
+      sheets.push({ times: ts, blob: await new Promise(r => sheet.toBlob(r, "image/jpeg", 0.86)) });
+    }
+    const sent = new Set(sheets.flatMap(s => s.times));
+    const keyFrame = async t => { try { await seek(Math.max(0.04, Math.min(dur - 0.06, t))); const kc = document.createElement("canvas"); kc.width = 480; kc.height = 270; kc.getContext("2d").drawImage(v, 0, 0, 480, 270); return kc.toDataURL("image/jpeg", 0.8); } catch { return null; } };
+    const cleanup = () => { v.removeAttribute("src"); v.load(); };
+    return { duration: r2(dur), width: v.videoWidth, height: v.videoHeight, cuts, windows, detail, flicker, grid: `${cols}x${rows}`, frames: frames.filter(f => sent.has(f.t)), unsent: times.filter(t => !sent.has(t)), sheets, keyFrame, cleanup };
+  }
+
+  // ---------- phase 1: Claude, one clip ----------
+  function phase1Prompt(c, m) {
+    const layout = m.sheets.map((s, i) => `image ${i + 1}: ${s.times.map(t => t.toFixed(2) + "s").join(", ")}`).join("; ");
+    const missing = m.frames.filter(f => !f.ok).map(f => f.t + "s");
+    return `You are a senior real-estate film editor and property marketing expert. Analyse ONE short AI-generated property video clip as thoroughly as possible. This is analysis only: do not plan an edit, a timeline, a clip order or music, and do not refer to earlier edits.
+
+Clip: "${c.filename}", ${m.duration}s, ${m.width}x${m.height}.
+The ${m.sheets.length} attached images are contact sheets (${m.grid} tiles each). Every tile is one frame with its source time stamped top-left; tiles run left to right, top to bottom. Frames every ${STEP}s across the whole clip: ${layout}.${missing.length ? ` These frames could not be read and show "Frame fehlt": ${missing.join(", ")}.` : ""}
+Browser measurements (they support what you see, never replace looking):
+- camera motion per 0.5 s window in percent of the frame per second (panX>0: image content moves right = camera moves left; tiltY>0: content moves down; push>0: push-in, <0: pull-back): ${JSON.stringify(m.windows)}
+- visible detail per ${STEP}s, percent of this clip's maximum (a strong drop usually means the camera runs into a wall or one object fills the frame): ${JSON.stringify(m.detail)}
+- brightness change per ${STEP}s (mean absolute frame-to-frame change of average brightness, 0-255 scale; values above about 3 on a smooth move hint at flicker): ${JSON.stringify(m.flicker)}
+- hard cuts inside the file: ${JSON.stringify(m.cuts)}
+
+Work in this order and take your time; understanding the clip correctly matters more than speed.
+STEP 1, frame by frame: for every tile note what is visible, how readable the space is, composition, sharpness and anything odd.
+STEP 2, over time: split the clip into consecutive segments that cover it from 0 to its end. Mark when the movement starts well, when it is stable, when the composition is strongest, when the movement looks best, when an object becomes too dominant or the camera gets too close, when the image becomes unstable, when AI artifacts appear, and from when a section is unsuitable for a later cut.
+STEP 3, problems: list only problems that are actually visible in the frames or clearly shown by the measurements. Do not invent problems; an empty list is a valid answer.
+STEP 4, meaning for the property: scene and room, and how much a buyer would care. Rooms are not equal.
+ - Typically high: building, exterior, living room, living/dining area, kitchen, balcony, terrace, view, garden, pool, large open spaces, architecturally striking areas.
+ - Typically secondary: bathroom, WC, hallway, gym, dressing room, storage, small side rooms.
+ - These are defaults, not absolutes: an exceptional spa bathroom can rate higher. visualStrength rates only the image quality of the usable range; propertyImportance and viewerInterest rate the content.
+STEP 5, usage and weight of this clip on its own (a later comparison with all other clips of the property sets the final weights):
+ - contentWeight (value of this clip for a property film), editingPriority (how strongly an editor should build around it), screenTimePriority (how much screen time it deserves): each 1-10 with one decimal. A technically perfect bathroom must NOT outrank a slightly weaker living room, terrace or exterior: content first, then quality of the usable range, camera movement, usability, hero potential.
+ - priorityClass: A hero/primary (may get a lot of screen time), B strong support, C secondary (show shorter), D optional (only if it fits dramaturgically or musically), E avoid (weak, uninteresting or technically problematic).
+ - Screen time from this concrete clip's usable range and quality, not from a fixed table. Orientation only: strong living room 2.5-4 s, bathroom 0.7-1.8 s, very strong exterior 2.5-4 s, weak side room 0.5-1 s or avoid.
+ - Playback: never recommend speeding up a whole clip just to use all frames. If the end gets weak, set usableEnd earlier instead. A calm, stable strong section may take a slight slowdown.
+
+Write every free-text value in German. Use null where a value does not exist. Return JSON only, in this field order:
+{"frames": [{"t": number, "note": string (max 14 words)}],
+ "segments": [{"from": number, "to": number, "label": "slow_start"|"good"|"stable"|"good_motion"|"strong"|"best_composition"|"approaching"|"dominant_object"|"too_close"|"unstable"|"ai_artifact"|"weak_framing"|"unusable"|"other", "note": string (max 16 words)}],
+ "issues": [{"type": "warped_geometry"|"bending_walls"|"morphing_furniture"|"disappearing_objects"|"unstable_textures"|"flicker"|"excessive_blur"|"unnatural_acceleration"|"slow_start"|"abrupt_movement"|"camera_too_close"|"bad_final_framing"|"distorted_architecture"|"other_ai_artifact", "from": number, "to": number, "severity": "minor"|"moderate"|"severe", "note": string}],
+ "sceneType": "exterior"|"building"|"interior"|"outdoor area"|"view"|"detail"|"other",
+ "roomType": "exterior"|"building"|"living room"|"living/dining"|"kitchen"|"dining"|"bedroom"|"bathroom"|"wc"|"terrace"|"balcony"|"garden"|"pool"|"view"|"hallway"|"gym"|"dressing room"|"storage"|"detail"|"other",
+ "shortDescription": string (max 30 words),
+ "cameraMovement": {"type": "push_in"|"pull_back"|"pan_left"|"pan_right"|"tilt"|"orbit"|"crane"|"static"|"other", "quality": integer 1-10, "note": string},
+ "movementGoodFrom": number or null, "perspectiveWorseFrom": number or null,
+ "propertyImportance": integer 1-10, "viewerInterest": integer 1-10, "visualStrength": integer 1-10,
+ "usableStart": number, "usableEnd": number, "strongestStart": number, "strongestEnd": number,
+ "weakStart": {"from": number, "to": number, "reason": string} or null, "weakEnd": {"from": number, "to": number, "reason": string} or null,
+ "bestUseSummary": string (which section should be used later and why, max 30 words),
+ "heroPotential": "high"|"medium"|"low",
+ "recommendedRoles": ["opening"|"hero"|"main room"|"secondary room"|"short insert"|"detail"|"transition shot"|"finale candidate"|"avoid"], "preferredRole": one of those,
+ "recommendedMinScreenTime": number, "recommendedMaxScreenTime": number, "screenTimeReason": string,
+ "recommendedPlayback": "normal"|"slight slowdown"|"slight speedup"|"avoid speed change", "playbackReason": string,
+ "contentWeight": number, "editingPriority": number, "screenTimePriority": number, "priorityClass": "A"|"B"|"C"|"D"|"E", "weightReason": string (max 40 words),
+ "confidence": "high"|"medium"|"low", "uncertainties": string (what you could not judge well, or "")}`;
+  }
+  async function analyzeClip(c, k, n) {
+    const src = srcOf(c);
+    if (!src) { log(`${c.filename}: Video nicht verfügbar. Bitte den Clip erneut hochladen.`, "bad"); return false; }
+    log(`Phase 1 · Clip ${k}/${n} · ${c.filename}: Frames lesen und messen …`);
+    const t0 = performance.now();
+    let m; try { m = await measure(src, c); } catch (e) { log(`${c.filename}: ${e.message}`, "bad"); return false; }
+    const ok = m.frames.filter(f => f.ok).length;
+    log(`${c.filename}: ${ok}/${m.frames.length} Frames gelesen, ${m.sheets.length} Kontaktbogen an Claude. Die gründliche Analyse dauert etwas …`);
+    let result = null, error = null;
+    try { result = await S.sample.json(phase1Prompt(c, m), { images: m.sheets.map(s => s.blob), modelTier: TIER, cache: false }); }
+    catch (e) { error = sampleMsg(e); log(`${c.filename}: ${error}`, "bad"); }
+    let key = null, keyT = null;
+    if (result) { keyT = isFinite(+result.strongestStart) && isFinite(+result.strongestEnd) ? (+result.strongestStart + +result.strongestEnd) / 2 : m.duration / 2; key = await m.keyFrame(keyT); }
+    m.cleanup();
+    const version = (S.analyses[c.id] || []).reduce((mx, a) => Math.max(mx, a.version), 0) + 1, id = `a_${c.id}_${version}`;
+    const failed = m.frames.filter(f => !f.ok).map(f => f.t);
+    const debug = { step: STEP, times: m.frames.map(f => f.t), requested: m.frames.length + m.unsent.length, loaded: ok, failed, unsent: m.unsent, sheets: m.sheets.length, grid: m.grid, maxImages: S.maxImg,
+      durationMeasured: m.duration, complete: !!result && !failed.length && !m.unsent.length, ms: Math.round(performance.now() - t0), modelTier: TIER };
+    await put("analyses", { id, clipId: c.id, setId: c.setId, version, createdAt: new Date().toISOString(), error, result, debug, metrics: { windows: m.windows, detail: m.detail, flicker: m.flicker, cuts: m.cuts } });
+    await put("frames", { id, setId: c.setId, clipId: c.id, thumbs: m.frames.map(f => ({ t: f.t, src: f.src })), key, keyT });
+    S.view[c.id] = id;
+    if (result) log(`${c.filename}: ${de(result.roomType) || "?"} · Relevanz ${result.propertyImportance}/10 · Klasse ${result.priorityClass} (vorläufig) · ${(debug.ms / 1000).toFixed(0)}s.`, "ok");
+    return !!result;
+  }
+
+  // ---------- phase 2: compare all clips of the set ----------
+  function phase2Prompt(items) {
+    const brief = items.map(({ key, c, a }) => { const r = a.result;
+      return { key, file: c.filename, duration: a.debug?.durationMeasured ?? c.duration, sceneType: r.sceneType, roomType: r.roomType, description: r.shortDescription,
+        propertyImportance: r.propertyImportance, viewerInterest: r.viewerInterest, visualStrength: r.visualStrength, heroPotential: r.heroPotential, camera: r.cameraMovement,
+        usable: [r.usableStart, r.usableEnd], strongest: [r.strongestStart, r.strongestEnd], weakStart: r.weakStart, weakEnd: r.weakEnd,
+        problems: (r.issues || []).map(i => `${i.type} ${i.severity} ${i.from}-${i.to}s`), preferredRole: r.preferredRole, screenTime: [r.recommendedMinScreenTime, r.recommendedMaxScreenTime],
+        phase1: { contentWeight: r.contentWeight, editingPriority: r.editingPriority, screenTimePriority: r.screenTimePriority, priorityClass: r.priorityClass }, confidence: r.confidence }; });
+    return `You are a senior real-estate film editor. All clips of ONE property upload were analysed one by one (phase 1). Now compare them with each other (phase 2) and set the final weights. Do not plan an edit, a clip order, a timeline or music.
+
+The attached image(s) show one representative frame per clip (from its strongest range), labelled with its key and file name.
+Phase-1 results: ${JSON.stringify(brief)}
+
+Check before you score:
+- Which clips show the same or a similar room? Several clips of one space compete: the stronger one keeps the weight, the others become support or optional.
+- Which scenes are unique?
+- Which scenes carry the property's main selling points?
+- Which clips are technically strong but secondary in content?
+- Which clips should clearly get more attention later, and which are dispensable compared with the others?
+Weights are relative to THIS material: with several strong main spaces a bathroom drops; with few strong clips the same bathroom may rise a little. Visual quality alone never decides; a technically perfect bathroom must not outrank a slightly weaker living room, terrace or exterior.
+Then set the final contentWeight, editingPriority, screenTimePriority (1-10, one decimal), priorityClass (A hero/primary, B strong support, C secondary, D optional, E avoid), finalScore (1-10, one decimal, the overall rank value) and a final screen time range that follows from the weight but stays within what the clip's usable range carries.
+
+Write every free-text value in German. Return JSON only:
+{"overview": string (3-5 sentences: what this property sells through, how strong the material is overall), "sellingPoints": [string], "similarGroups": [{"keys": [string], "note": string}],
+ "clips": [{"key": string, "finalScore": number, "contentWeight": number, "editingPriority": number, "screenTimePriority": number, "priorityClass": "A"|"B"|"C"|"D"|"E", "uniqueness": "unique"|"similar"|"duplicate", "similarTo": [string], "recommendedMinScreenTime": number, "recommendedMaxScreenTime": number, "relativeReason": string (max 40 words: why this rank relative to the others), "changeFromPhase1": string (what changed against phase 1 and why, or "unverändert")}]}
+Include every key exactly once.`;
+  }
+  const loadImg = src => new Promise(res => { if (!src) return res(null); const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+  async function overviewSheets(items) {
+    const per = items.length <= 4 * S.maxImg ? 4 : 9, cols = per === 4 ? 2 : 3, tw = 960 / cols, th = 540 / cols, out = [];
+    const cv = document.createElement("canvas"); cv.width = 960; cv.height = 540; const x2 = cv.getContext("2d");
+    for (let k = 0; k < items.length && out.length < S.maxImg; k += per) {
+      x2.fillStyle = "#000"; x2.fillRect(0, 0, 960, 540);
+      const part = items.slice(k, k + per);
+      for (let j = 0; j < part.length; j++) {
+        const it = part[j], x = (j % cols) * tw, y = Math.floor(j / cols) * th, im = await loadImg(S.frames[it.a.id]?.key);
+        if (im) x2.drawImage(im, x, y, tw, th); else { x2.fillStyle = "#333"; x2.fillRect(x, y, tw, th); }
+        x2.fillStyle = "rgba(0,0,0,0.72)"; x2.fillRect(x, y, tw, 30); x2.fillStyle = "#fff"; x2.font = "bold 18px sans-serif"; x2.fillText(`${it.key} · ${it.c.filename}`.slice(0, 42), x + 8, y + 21);
+        x2.strokeStyle = "#000"; x2.lineWidth = 3; x2.strokeRect(x, y, tw, th);
+      }
+      out.push(await new Promise(r => cv.toBlob(r, "image/jpeg", 0.85)));
+    }
+    return out;
+  }
+  async function compare() {
+    const items = S.clips.map(c => ({ c, a: latest(c.id) })).filter(x => x.a).map((x, i) => ({ ...x, key: "K" + (i + 1) }));
+    if (!items.length) { log("Noch keine Einzelanalyse vorhanden.", "warn"); return; }
+    log(`Phase 2 · Claude vergleicht ${items.length} Clips miteinander …`);
+    let res; try { res = await S.sample.json(phase2Prompt(items), { images: await overviewSheets(items), modelTier: TIER, cache: false }); }
+    catch (e) { log("Phase 2: " + sampleMsg(e), "bad"); return; }
+    const byKey = Object.fromEntries((res.clips || []).map(x => [x.key, x]));
+    const clips = {}, missing = [];
+    for (const it of items) {
+      const f = byKey[it.key], r = it.a.result;
+      if (!f) missing.push(it.c.filename);
+      clips[it.c.id] = f ? { ...f, similarTo: (f.similarTo || []).map(k => items.find(x => x.key === k)?.c.id).filter(Boolean) }
+        : { key: it.key, finalScore: r.contentWeight, contentWeight: r.contentWeight, editingPriority: r.editingPriority, screenTimePriority: r.screenTimePriority, priorityClass: r.priorityClass, recommendedMinScreenTime: r.recommendedMinScreenTime, recommendedMaxScreenTime: r.recommendedMaxScreenTime, relativeReason: "Im Vergleich nicht bewertet, Werte aus Phase 1.", missing: true };
+    }
+    const ranking = items.map(it => it.c.id).sort((x, y) => (+clips[y].finalScore || 0) - (+clips[x].finalScore || 0) || (+clips[y].contentWeight || 0) - (+clips[x].contentWeight || 0));
+    const groups = (res.similarGroups || []).map(g => ({ note: g.note, clips: (g.keys || []).map(k => items.find(x => x.key === k)?.c.id).filter(Boolean) }));
+    await put("comparisons", { id: uid("k"), setId: S.setId, createdAt: new Date().toISOString(), analysisIds: Object.fromEntries(items.map(it => [it.c.id, it.a.id])), keys: Object.fromEntries(items.map(it => [it.c.id, it.key])),
+      overview: res.overview || "", sellingPoints: res.sellingPoints || [], similarGroups: groups, clips, ranking, missing, modelTier: TIER });
+    log(`Phase 2 fertig: Rangfolge für ${items.length} Clips${missing.length ? `, ${missing.length} ohne Vergleichswert` : ""}.`, missing.length ? "warn" : "ok");
+  }
+
+  // ---------- run buttons ----------
+  async function run(task) { if (S.busy) return; S.busy = true; render(); try { await task(); } catch (e) { log("Fehler: " + (e?.message || e), "bad"); } finally { S.busy = false; render(); } }
+  async function analyzeAll(force) {
+    const todo = S.clips.filter(c => force || !latest(c.id));
+    let changed = false;
+    for (let i = 0; i < todo.length; i++) changed = (await analyzeClip(todo[i], i + 1, todo.length)) || changed;
+    if (!todo.length) log("Alle Clips sind bereits analysiert.");
+    if (changed || !cmpFresh(currentCmp())) await compare();
+  }
+  $("btn-analyze").addEventListener("click", () => run(() => analyzeAll(false)));
+  $("btn-reall").addEventListener("click", () => run(() => analyzeAll(true)));
+  $("btn-compare").addEventListener("click", () => run(compare));
+  $("btn-newset").addEventListener("click", async () => { const id = uid("s"); await put("sets", { id, name: `Set ${S.sets.length + 1}`, createdAt: new Date().toISOString() }); selectSet(id); log(`Neues Set angelegt. Lade die Clips einer Immobilie hinein.`); });
+  $("set-select").addEventListener("change", e => selectSet(e.target.value));
+  document.addEventListener("click", e => {
+    const b = e.target.closest("button[data-act]"); if (!b) return;
+    const c = S.clips.find(x => x.id === b.dataset.clip); if (!c) return;
+    if (b.dataset.act === "reanalyze") run(async () => { if (await analyzeClip(c, 1, 1)) await compare(); });
+    if (b.dataset.act === "remove") { if (S.confirmDel === c.id) { S.confirmDel = null; run(() => removeClip(c)); } else { S.confirmDel = c.id; render(); } }
+  });
+  document.addEventListener("change", e => { const s = e.target.closest("select[data-version]"); if (s) { S.view[s.dataset.version] = s.value; render(); } });
+
+  // ---------- plausibility checks (code, no AI): make unreliable answers visible ----------
+  function checks(r, d, fin) {
+    const out = [], D = +d || 0, num0 = x => isFinite(+x) ? +x : null;
+    const us = num0(r.usableStart), ue = num0(r.usableEnd), ss = num0(r.strongestStart), se = num0(r.strongestEnd);
+    if (us == null || ue == null || !(ue > us)) out.push("Nutzbarer Bereich fehlt oder ist leer.");
+    else if (us < -0.05 || ue > D + 0.1) out.push(`Nutzbarer Bereich ${rng(us, ue)} liegt außerhalb der Cliplänge ${sec(D)}.`);
+    if (ss != null && se != null && us != null && ue != null && (ss < us - 0.1 || se > ue + 0.1)) out.push("Stärkster Bereich liegt nicht innerhalb des nutzbaren Bereichs.");
+    if (r.weakEnd && ue != null && +r.weakEnd.from < ue - 0.1) out.push("Schwaches Ende beginnt vor dem Ende des nutzbaren Bereichs.");
+    if (r.weakStart && us != null && +r.weakStart.to > us + 0.1) out.push("Schwacher Start reicht in den nutzbaren Bereich.");
+    const mn = num0(fin?.recommendedMinScreenTime ?? r.recommendedMinScreenTime), mx = num0(fin?.recommendedMaxScreenTime ?? r.recommendedMaxScreenTime);
+    if (mn != null && mx != null && mn > mx) out.push("Minimale Screentime ist größer als die maximale.");
+    if (mx != null && us != null && ue != null && mx > (ue - us) / 0.8 + 0.1) out.push(`Empfohlene Screentime ${sec(mx)} ist länger als der nutzbare Bereich auch mit leichter Verlangsamung trägt.`);
+    const cls = fin?.priorityClass || r.priorityClass, cw = +(fin?.contentWeight ?? r.contentWeight);
+    if (cls === "A" && cw < 7) out.push("Klasse A bei niedrigem Content Weight.");
+    if (cls === "E" && cw > 5) out.push("Klasse E bei mittlerem oder hohem Content Weight.");
+    if (SECONDARY_ROOMS.has(String(r.roomType || "").toLowerCase()) && (cls === "A" || cls === "B" || cw >= 7)) out.push(`Nebenraum (${de(r.roomType)}) hoch gewichtet. Begründung prüfen.`);
+    const ref = 0.45 * r.propertyImportance + 0.30 * r.viewerInterest + 0.25 * r.visualStrength;
+    if (r.visualStrength - r.propertyImportance >= 4 && cw > ref + 1.5) out.push("Gewichtung folgt eher der Bildqualität als dem Inhalt.");
+    if (r.recommendedPlayback === "slight speedup" && r.weakEnd) out.push("Beschleunigung empfohlen, obwohl das Ende schwach ist.");
+    return out;
+  }
+
+  // ---------- render ----------
+  function renderSets() {
+    const sel = $("set-select");
+    sel.innerHTML = S.sets.length ? S.sets.map(s => `<option value="${esc(s.id)}" ${s.id === S.setId ? "selected" : ""}>${esc(s.name)}</option>`).join("") : `<option value="">Noch kein Set</option>`;
+  }
+  function render() {
+    renderSets();
+    const noAI = !S.sample || !S.maxImg;
+    $("btn-analyze").disabled = S.busy || noAI || !S.clips.length;
+    $("btn-reall").disabled = S.busy || noAI || !S.clips.length;
+    $("btn-compare").disabled = S.busy || noAI || !S.clips.some(c => latest(c.id));
+    renderTray(); renderResults();
+  }
+  function renderTray() {
+    const tray = $("tray");
+    if (!S.clips.length) { tray.innerHTML = `<p class="muted small">Noch keine Clips in diesem Set.</p>`; return; }
+    // keep existing <video> elements so previews do not reload on every render
+    const seen = new Set();
+    for (const c of S.clips) {
+      seen.add(c.id);
+      let el = tray.querySelector(`[data-tile="${c.id}"]`);
+      const src = srcOf(c);
+      if (!el) {
+        el = document.createElement("div"); el.className = "tile"; el.dataset.tile = c.id;
+        el.innerHTML = `<video preload="metadata" muted playsinline controls></video><div class="meta"></div><div class="acts"></div>`;
+        if (src) el.querySelector("video").src = src;
+        tray.querySelector("p")?.remove(); tray.appendChild(el);
+      } else if (src && !el.querySelector("video").getAttribute("src")) el.querySelector("video").src = src;
+      const a = latest(c.id), n = (S.analyses[c.id] || []).length;
+      el.querySelector(".meta").innerHTML = `<span class="name">${esc(c.filename)}</span><span class="small muted mono">${c.duration ? `${c.duration.toFixed(2)}s` : "Dauer unbekannt"} · ${(c.size / 1048576).toFixed(1)} MB</span>
+        <span class="small">${a ? `analysiert · Version ${a.version}${n > 1 ? ` von ${n}` : ""}` : `<span class="muted">noch nicht analysiert</span>`}</span>${!src ? `<span class="small" style="color:var(--bad)">Video fehlt, bitte erneut hochladen.</span>` : c.note && !c.assetId ? `<span class="small" style="color:var(--warn)">${esc(c.note)}</span>` : ""}`;
+      el.querySelector(".acts").innerHTML = `<button data-act="reanalyze" data-clip="${c.id}" ${S.busy || !S.maxImg || !src ? "disabled" : ""}>Re-analyze</button><button class="danger" data-act="remove" data-clip="${c.id}" ${S.busy ? "disabled" : ""}>${S.confirmDel === c.id ? "Wirklich entfernen?" : "Entfernen"}</button>`;
+    }
+    tray.querySelectorAll("[data-tile]").forEach(el => { if (!seen.has(el.dataset.tile)) el.remove(); });
+  }
+  function finalOf(cmp, c, a) { return cmp && cmp.analysisIds?.[c.id] === a?.id ? cmp.clips?.[c.id] : null; }
+  function renderResults() {
+    const cmp = currentCmp(), fresh = cmpFresh(cmp);
+    $("cmp-meta").textContent = cmp ? `Vergleich vom ${fmtDate(cmp.createdAt)}${fresh ? "" : " · veraltet, bitte „Vergleich neu“"}` : "";
+    const analysed = S.clips.filter(c => latest(c.id));
+    if (!analysed.length) { $("summary").innerHTML = ""; $("cards").innerHTML = `<div class="empty">Hier erscheinen nach „Analyze Clips“ die Rangfolge und eine Analysekarte pro Clip.</div>`; return; }
+    const order = cmp ? [...(cmp.ranking || []).filter(id => S.clips.some(c => c.id === id)), ...analysed.map(c => c.id).filter(id => !(cmp.ranking || []).includes(id))] : analysed.map(c => c.id);
+    // summary
+    if (cmp) {
+      const name = id => S.clips.find(c => c.id === id)?.filename || "?";
+      const room = id => de(latest(id)?.result?.roomType);
+      const rows = (cmp.ranking || []).filter(id => cmp.clips[id] && S.clips.some(c => c.id === id)).map((id, i) => { const f = cmp.clips[id];
+        return `<li><span class="n">${i + 1}.</span><span class="cls ${esc(f.priorityClass || "none")}">${esc(f.priorityClass || "–")}</span><span class="who"><b>${esc(room(id))} · ${esc(name(id))}</b><span class="bar"><span style="width:${Math.max(0, Math.min(10, +f.finalScore || 0)) * 10}%"></span></span></span><span class="score">${num(f.finalScore)}</span></li>`; }).join("");
+      const groups = GROUPS.map(([g, cls, hint]) => { const ids = (cmp.ranking || []).filter(id => cls.includes(cmp.clips[id]?.priorityClass) && S.clips.some(c => c.id === id));
+        return `<div class="group"><div class="row between"><h3>${g}</h3><span class="small muted">${cls.join("/")} · ${hint}</span></div>${ids.length ? `<ul>${ids.map(id => `<li>${esc(room(id))} · ${esc(name(id))}</li>`).join("")}</ul>` : `<span class="small muted">keine</span>`}</div>`; }).join("");
+      $("summary").innerHTML = `<div class="summary"><div><span class="label">Rangfolge (Phase 2)</span><ol class="rank" style="margin-top:8px">${rows}</ol></div>
+        <div style="display:grid;gap:12px;align-content:start"><div class="groups">${groups}</div>
+        <div class="overview small"><p>${esc(cmp.overview)}</p>${cmp.sellingPoints?.length ? `<p><b>Verkaufsfaktoren:</b> ${cmp.sellingPoints.map(esc).join(" · ")}</p>` : ""}${cmp.similarGroups?.length ? `<p><b>Ähnliche Clips:</b> ${cmp.similarGroups.map(g => `${g.clips.map(name).map(esc).join(" + ")} (${esc(g.note)})`).join(" · ")}</p>` : ""}</div></div></div>`;
+    } else $("summary").innerHTML = `<p class="notice">Noch kein Vergleich. Die Karten zeigen vorläufige Werte aus Phase 1.</p>`;
+    // cards
+    const openState = {}; document.querySelectorAll("#cards details[data-k]").forEach(d => openState[d.dataset.k] = d.open);
+    $("cards").innerHTML = order.map((id, i) => card(S.clips.find(c => c.id === id), cmp ? i + 1 : null, cmp)).join("");
+    document.querySelectorAll("#cards details[data-k]").forEach(d => { if (openState[d.dataset.k]) d.open = true; });
+  }
+  function timebar(r, a, D) {
+    const pct = x => `${Math.max(0, Math.min(100, (+x / D) * 100))}%`, w = (s, e) => `${Math.max(0, Math.min(100, ((+e - +s) / D) * 100))}%`;
+    const segs = (r.segments || []).map(s => `<span class="seg" title="${esc(`${rng(s.from, s.to)} ${SEG_DE[s.label] || s.label}: ${s.note}`)}" style="left:${pct(s.from)};width:${w(s.from, s.to)};background:var(--seg-${SEG[s.label] || "neutral"})"></span>`).join("");
+    const ticks = Array.from({ length: Math.floor(D) + 1 }, (_, i) => `<span class="tick" style="left:${pct(i)}">${i}s</span>`).join("");
+    const fr = (a.debug?.times || []).map(t => `<span class="fr ${(a.debug.failed || []).includes(t) ? "miss" : ""}" style="left:${pct(t)}"></span>`).join("");
+    const use = isFinite(+r.usableStart) ? `<span class="rng use" style="left:${pct(r.usableStart)};width:${w(r.usableStart, r.usableEnd)}" title="nutzbar"></span>` : "";
+    const best = isFinite(+r.strongestStart) ? `<span class="rng best" style="left:${pct(r.strongestStart)};width:${w(r.strongestStart, r.strongestEnd)}" title="stärkster Bereich"></span>` : "";
+    return `<div class="timebar" aria-hidden="true">${ticks}<div class="track">${segs}</div>${fr}${use}${best}</div>
+      <div class="legend"><span><i style="background:var(--seg-best)"></i>stark / stärkster Bereich</span><span><i style="background:var(--seg-good)"></i>gut / nutzbar</span><span><i style="background:var(--seg-weak)"></i>schwächer</span><span><i style="background:var(--seg-bad)"></i>ungeeignet</span><span>Striche: analysierte Frames${(a.debug?.failed || []).length ? ", rot = fehlt" : ""}</span></div>`;
+  }
+  function card(c, rank, cmp) {
+    const versions = S.analyses[c.id] || [], a = shown(c.id), r = a?.result;
+    if (!r) return "";
+    const isLatest = a.id === latest(c.id)?.id, fin = finalOf(cmp, c, a), D = +(a.debug?.durationMeasured || c.duration || 4);
+    const cls = fin?.priorityClass || r.priorityClass, fr = S.frames[a.id];
+    const val = (k, d = 1) => fin && fin[k] != null ? `${num(fin[k], d)}${r[k] != null && Math.abs(+fin[k] - +r[k]) >= 0.05 ? ` <small>P1 ${num(r[k], d)}</small>` : ""}` : `${num(r[k], d)}${cmp ? "" : " <small>vorl.</small>"}`;
+    const metric = (label, v) => `<div class="metric"><span class="label">${label}</span><span class="v">${v}</span></div>`;
+    const weak = [r.weakStart && `Start ${rng(r.weakStart.from, r.weakStart.to)}: ${esc(r.weakStart.reason)}`, r.weakEnd && `Ende ${rng(r.weakEnd.from, r.weakEnd.to)}: ${esc(r.weakEnd.reason)}`].filter(Boolean);
+    const issues = (r.issues || []).map(x => `<li>${esc(ISSUE_DE[x.type] || x.type)} <span>${rng(x.from, x.to)} · ${esc(x.severity)}</span>: ${esc(x.note)}</li>`).join("");
+    const chk = checks(r, D, fin), names = ids => (ids || []).map(id => S.clips.find(x => x.id === id)?.filename).filter(Boolean).map(esc).join(", ");
+    const dbg = a.debug || {};
+    return `<article class="card">
+      <div class="card-head">
+        ${fr?.key ? `<img src="${fr.key}" alt="Frame aus dem stärksten Bereich von ${esc(c.filename)}">` : `<div class="ph"></div>`}
+        <div style="display:grid;gap:10px;min-width:0">
+          <div class="titleline">${rank ? `<span class="mono muted">#${rank}</span>` : ""}<span class="cls ${esc(cls || "none")}" title="Prioritätsklasse">${esc(cls || "–")}</span><h2>${esc(c.filename)}</h2>
+            <span class="pill ${r.heroPotential === "high" ? "hero" : ""}">Hero ${esc({ high: "hoch", medium: "mittel", low: "niedrig" }[r.heroPotential] || r.heroPotential)}</span>
+            ${!isLatest ? `<span class="pill stale">ältere Version</span>` : !fin && cmp ? `<span class="pill stale">nicht im aktuellen Vergleich</span>` : ""}</div>
+          <p><b>${esc(de(r.roomType))}</b> <span class="muted">· ${esc(de(r.sceneType))}</span> · ${esc(r.shortDescription)}</p>
+          <div class="row small">
+            <label class="muted" for="ver-${c.id}">Analyse</label>
+            <select id="ver-${c.id}" data-version="${c.id}">${versions.slice().reverse().map(v => `<option value="${v.id}" ${v.id === a.id ? "selected" : ""}>Version ${v.version} · ${fmtDate(v.createdAt)}${v.result ? "" : " · Fehler"}</option>`).join("")}</select>
+            <button data-act="reanalyze" data-clip="${c.id}" ${S.busy || !S.maxImg || !srcOf(c) ? "disabled" : ""}>Re-analyze</button>
+          </div>
+        </div>
+      </div>
+      <div class="metrics">
+        ${metric("Property Importance", num(r.propertyImportance, 0))}${metric("Viewer Interest", num(r.viewerInterest, 0))}${metric("Visual Strength", num(r.visualStrength, 0))}
+        ${metric("Content Weight", val("contentWeight"))}${metric("Editing Priority", val("editingPriority"))}${metric("Screen Time Priority", val("screenTimePriority"))}
+        ${metric("Priority Class", `${esc(cls || "–")}${fin && r.priorityClass !== fin.priorityClass ? ` <small>P1 ${esc(r.priorityClass)}</small>` : ""}`)}${metric("Final Score", fin ? num(fin.finalScore) : "–")}
+      </div>
+      ${timebar(r, a, D)}
+      <dl class="facts">
+        <dt>Bester nutzbarer Bereich</dt><dd class="mono">${rng(r.usableStart, r.usableEnd)}</dd>
+        <dt>Stärkster Bereich</dt><dd><span class="mono">${rng(r.strongestStart, r.strongestEnd)}</span> · ${esc(r.bestUseSummary)}</dd>
+        <dt>Schwache Bereiche</dt><dd>${weak.length ? weak.join("<br>") : "keine"}${r.perspectiveWorseFrom != null ? `<br><span class="muted small">Perspektive schlechter ab ${sec(r.perspectiveWorseFrom)}</span>` : ""}${r.movementGoodFrom != null ? `<br><span class="muted small">Bewegung gut ab ${sec(r.movementGoodFrom)}</span>` : ""}</dd>
+        <dt>Empfohlene Rolle</dt><dd><b>${esc(r.preferredRole)}</b>${(r.recommendedRoles || []).filter(x => x !== r.preferredRole).length ? ` <span class="muted">· auch ${(r.recommendedRoles || []).filter(x => x !== r.preferredRole).map(esc).join(", ")}</span>` : ""}</dd>
+        <dt>Empfohlene Screentime</dt><dd><span class="mono">${rng(fin?.recommendedMinScreenTime ?? r.recommendedMinScreenTime, fin?.recommendedMaxScreenTime ?? r.recommendedMaxScreenTime)}</span>${fin && (+fin.recommendedMaxScreenTime !== +r.recommendedMaxScreenTime || +fin.recommendedMinScreenTime !== +r.recommendedMinScreenTime) ? ` <span class="muted small">Phase 1: ${rng(r.recommendedMinScreenTime, r.recommendedMaxScreenTime)}</span>` : ""} · ${esc(r.screenTimeReason)}</dd>
+        <dt>Playback</dt><dd><b>${esc(r.recommendedPlayback)}</b> · ${esc(r.playbackReason)}</dd>
+        <dt>Kamerabewegung</dt><dd>${esc(r.cameraMovement?.type)} · Qualität ${num(r.cameraMovement?.quality, 0)}/10 · ${esc(r.cameraMovement?.note)}</dd>
+        <dt>Probleme / AI-Artefakte</dt><dd>${issues ? `<ul class="issues">${issues}</ul>` : "keine erkannt"}</dd>
+        <dt>Gewichtung</dt><dd>${esc(r.weightReason)}</dd>
+        <dt>Sicherheit</dt><dd>${esc({ high: "hoch", medium: "mittel", low: "niedrig" }[r.confidence] || r.confidence)}${r.uncertainties ? ` · ${esc(r.uncertainties)}` : ""}</dd>
+      </dl>
+      ${fin ? `<div class="relative"><span class="label">Im Vergleich (Phase 2)</span><span>${esc(fin.relativeReason)}</span>${fin.similarTo?.length ? `<span class="small">Ähnlich wie: ${names(fin.similarTo)} · ${esc(fin.uniqueness)}</span>` : fin.uniqueness ? `<span class="small muted">${esc(fin.uniqueness)}</span>` : ""}${fin.changeFromPhase1 ? `<span class="small muted">Änderung gegenüber Phase 1: ${esc(fin.changeFromPhase1)}</span>` : ""}</div>` : ""}
+      ${chk.length ? `<div><span class="label">Plausibilitätsprüfung</span><ul class="checks">${chk.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      <details data-k="t-${a.id}"><summary>Frame-Timeline · ${(r.segments || []).length} Abschnitte, ${(r.frames || []).length} Frame-Notizen</summary>
+        <ul class="segs">${(r.segments || []).map(s => `<li><span class="mono">${rng(s.from, s.to)}</span><i style="background:var(--seg-${SEG[s.label] || "neutral"})"></i><span><b>${esc(SEG_DE[s.label] || s.label)}</b> · ${esc(s.note)}</span></li>`).join("")}</ul>
+        <div class="strip">${(fr?.thumbs || dbg.times?.map(t => ({ t })) || []).map(f => { const note = (r.frames || []).find(x => Math.abs(+x.t - f.t) < 0.06)?.note;
+          return `<figure>${f.src ? `<img src="${f.src}" alt="Frame bei ${f.t.toFixed(2)}s">` : `<div class="ph">${(dbg.failed || []).includes(f.t) ? "Frame fehlt" : ""}</div>`}<figcaption><b>${f.t.toFixed(2)}s</b> ${esc(note || "")}</figcaption></figure>`; }).join("")}</div>
+      </details>
+      <details data-k="d-${a.id}"><summary>Debug · ${dbg.complete ? "vollständig" : "unvollständig"}</summary>
+        <div class="debug">
+          <span class="muted">Analysiert am</span><span>${fmtDate(a.createdAt)} · Version ${a.version} · ${((dbg.ms || 0) / 1000).toFixed(0)}s · Stufe ${esc(dbg.modelTier)}</span>
+          <span class="muted">Frames</span><span>${dbg.loaded}/${dbg.requested} gelesen · alle ${dbg.step}s · ${dbg.sheets} Kontaktbogen (${esc(dbg.grid)}), Bildlimit ${dbg.maxImages}</span>
+          <span class="muted">Zeitpunkte</span><span class="mono small">${(dbg.times || []).map(t => t.toFixed(2)).join(" · ")}</span>
+          <span class="muted">Nicht geladen</span><span class="mono small">${(dbg.failed || []).length ? dbg.failed.map(t => t.toFixed(2) + "s").join(", ") : "–"}${(dbg.unsent || []).length ? ` · nicht gesendet (Bildlimit): ${dbg.unsent.map(t => t.toFixed(2) + "s").join(", ")}` : ""}</span>
+          <span class="muted">Clip</span><span>${sec(dbg.durationMeasured)} gemessen · ${c.width || "?"}×${c.height || "?"} · harte Schnitte: ${(a.metrics?.cuts || []).length ? a.metrics.cuts.map(sec).join(", ") : "keine"}</span>
+          <span class="muted">Vergleich</span><span>${fin ? `Schlüssel ${esc(cmp.keys?.[c.id] || "")} · ${fmtDate(cmp.createdAt)}` : "nicht im aktuellen Vergleich"}</span>
+        </div>
+      </details>
+    </article>`;
+  }
+
+  boot();
+})();
+</script>
