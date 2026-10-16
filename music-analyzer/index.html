@@ -1,0 +1,562 @@
+<title>Musik-Struktur</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:wght@400;600&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a studio session sheet: track picker, then the full-song map (energy per bar, beat grid, sections), then structure, key moments and continuous excerpts per length */
+:root {
+  --bg: #f1efeb; --panel: #fbfaf8; --ink: #1d1b19; --muted: #67615a; --line: #dcd6ce; --soft: #e8e3dc;
+  --accent: #5b3fd1; --accent-ink: #ffffff; --ok: #237a4b; --warn: #946200; --bad: #b42d23;
+  --energy: #5b3fd1; --beat: #a59d93; --down: #1d1b19; --rise: #237a4b; --fall: #c0612b; --drop: #b42d23; --moment: #d4a21c; --pick: rgba(91, 63, 209, 0.14);
+  --s-intro: #c9c3ea; --s-build: #a99be6; --s-high: #6f55d9; --s-peak: #4a2fbe; --s-break: #e3cfa8; --s-main: #8a74df; --s-release: #e8bf95; --s-outro: #d8d2ca; --s-other: #cfc9c1;
+  --src-shot: #1f6f9f; --src-grid: #2e8a8a; --src-code: #6b6359; --src-claude: #5b3fd1;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "Martian Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141311; --panel: #1c1a18; --ink: #ece7e1; --muted: #a39b91; --line: #34302b; --soft: #26231f;
+  --accent: #a593ff; --accent-ink: #141311; --ok: #5fc58c; --warn: #e0b04a; --bad: #f07a6e;
+  --energy: #9a86ff; --beat: #5f5850; --down: #ece7e1; --rise: #5fc58c; --fall: #f09a5f; --drop: #f07a6e; --moment: #e8c050; --pick: rgba(165, 147, 255, 0.16);
+  --s-intro: #3b3560; --s-build: #4c4285; --s-high: #6b5bc4; --s-peak: #8b77f0; --s-break: #5c4a2c; --s-main: #5a4ca3; --s-release: #6b4a30; --s-outro: #3a3631; --s-other: #403b35;
+  --src-shot: #6fb6e2; --src-grid: #6cc9c9; --src-code: #a39b91; --src-claude: #a593ff; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #141311; --panel: #1c1a18; --ink: #ece7e1; --muted: #a39b91; --line: #34302b; --soft: #26231f;
+  --accent: #a593ff; --accent-ink: #141311; --ok: #5fc58c; --warn: #e0b04a; --bad: #f07a6e;
+  --energy: #9a86ff; --beat: #5f5850; --down: #ece7e1; --rise: #5fc58c; --fall: #f09a5f; --drop: #f07a6e; --moment: #e8c050; --pick: rgba(165, 147, 255, 0.16);
+  --s-intro: #3b3560; --s-build: #4c4285; --s-high: #6b5bc4; --s-peak: #8b77f0; --s-break: #5c4a2c; --s-main: #5a4ca3; --s-release: #6b4a30; --s-outro: #3a3631; --s-other: #403b35;
+  --src-shot: #6fb6e2; --src-grid: #6cc9c9; --src-code: #a39b91; --src-claude: #a593ff; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15.5px; line-height: 1.5; }
+.wrap { max-width: 1160px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 20px; }
+.wrap > *, section.panel > * { min-width: 0; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 1.15rem; font-weight: 800; }
+h3 { font-size: 0.98rem; font-weight: 600; }
+p { margin: 0; }
+.muted { color: var(--muted); } .small { font-size: 0.86rem; }
+.mono { font-family: var(--f-mono); font-size: 0.86em; font-variant-numeric: tabular-nums; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; }
+button, select, input { font: inherit; }
+button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.danger { color: var(--bad); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+select, input[type=text], input[type=number] { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 6px 10px; min-width: 0; }
+header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+header.top .lead { max-width: 64ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.78rem; background: var(--panel); white-space: nowrap; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--beat); }
+.chip.on i { background: var(--ok); } .chip.off i { background: var(--bad); }
+section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.row.between { justify-content: space-between; }
+.notice { border-left: 3px solid var(--warn); padding: 8px 12px; background: var(--soft); border-radius: 0 8px 8px 0; font-size: 0.9rem; }
+.log { font-family: var(--f-mono); font-size: 0.74rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 150px; overflow: auto; white-space: pre-wrap; }
+.log .ok { color: var(--ok); } .log .warn { color: var(--warn); } .log .bad { color: var(--bad); }
+.tracks { display: grid; gap: 6px; }
+.track { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.track:has(input:checked) { border-color: var(--accent); background: var(--soft); }
+.track .name { font-weight: 600; overflow-wrap: anywhere; }
+.track .facts { font-size: 0.82rem; color: var(--muted); }
+.status { font-size: 0.78rem; white-space: nowrap; }
+.urlrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+audio { width: 100%; }
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.stat { background: var(--bg); border-radius: 10px; padding: 8px 12px; display: grid; gap: 2px; }
+.stat .v { font-family: var(--f-display); font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.stat .v.na { font-family: var(--f-body); font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+.src { display: inline-block; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.03em; padding: 0 6px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; vertical-align: 1px; }
+.src.shot { color: var(--src-shot); } .src.grid { color: var(--src-grid); } .src.code { color: var(--src-code); } .src.claude { color: var(--src-claude); }
+.mapbox { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.mapbox svg { display: block; min-width: 760px; width: 100%; height: auto; cursor: crosshair; }
+svg text { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
+svg .seglabel { fill: var(--ink); font-family: var(--f-body); font-size: 11px; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.78rem; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 10px; margin-right: 5px; vertical-align: -1px; border-radius: 2px; }
+.cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; }
+@media (max-width: 820px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.segs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.segs li { display: grid; grid-template-columns: 112px 10px minmax(0, 1fr); gap: 10px; align-items: start; }
+.segs li i { width: 10px; height: 100%; min-height: 18px; border-radius: 3px; }
+.segs .t { font-family: var(--f-mono); font-size: 0.8rem; padding-top: 2px; }
+.segs b { font-family: var(--f-display); font-weight: 600; }
+.flag { color: var(--warn); font-size: 0.84rem; }
+.moments { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.moments li { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.lengths { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.len { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: start; }
+.cand { border-top: 1px solid var(--line); padding-top: 8px; display: grid; gap: 4px; }
+.cand:first-of-type { border-top: 0; padding-top: 0; }
+.cand .head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.cand .score { font-family: var(--f-display); font-weight: 800; font-size: 1.15rem; }
+.cand .why { font-size: 0.84rem; }
+.subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 2px 8px; font-size: 0.72rem; color: var(--muted); }
+.subs span { display: flex; justify-content: space-between; gap: 4px; white-space: nowrap; }
+.subs span b { color: var(--ink); font-weight: 600; font-family: var(--f-mono); font-size: 0.68rem; }
+.cand .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.cand .acts button { padding: 3px 9px; font-size: 0.78rem; }
+.cand.sel { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.claude-note { font-size: 0.82rem; border-left: 2px solid var(--src-claude); padding-left: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.tablebox { overflow-x: auto; }
+td.na { color: var(--muted); }
+pre { margin: 0; font-family: var(--f-mono); font-size: 0.72rem; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; background: var(--bg); padding: 10px; border-radius: 8px; }
+details summary { cursor: pointer; font-weight: 600; }
+.empty { text-align: center; padding: 28px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); }
+.kv { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 4px 14px; font-size: 0.88rem; }
+@media (max-width: 620px) { .kv { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="lead">
+      <h1>Musik-Struktur</h1>
+      <p class="muted">Testlabor für die reine Musikanalyse: Shotstack misst den Track, Claude deutet nur diese Messwerte. Keine Clips, kein Schnitt, kein Render.</p>
+    </div>
+    <div class="chips" aria-label="Verfügbarkeit">
+      <span class="chip" id="cap-mcp"><i></i>Shotstack</span>
+      <span class="chip" id="cap-sample"><i></i>Claude</span>
+      <span class="chip" id="cap-db"><i></i>Speicher</span>
+    </div>
+  </header>
+  <div class="notice" id="nocaps" hidden></div>
+
+  <section class="panel" aria-labelledby="h-in">
+    <div class="row between"><h2 id="h-in">1 · Music Input</h2><span class="small muted">Tracks aus deinem Shotstack-Upload (stage). Neue Uploads: im Chat „sync“ sagen.</span></div>
+    <div class="tracks" id="tracks"></div>
+    <div class="urlrow">
+      <input type="text" id="url-input" placeholder="oder öffentliche MP3-/WAV-URL einfügen" aria-label="Öffentliche Musik-URL">
+      <button id="btn-url">Track hinzufügen</button>
+    </div>
+    <audio id="player" controls preload="none"></audio>
+  </section>
+
+  <section class="panel" aria-labelledby="h-an">
+    <div class="row between">
+      <h2 id="h-an">2 · Analyze Music</h2>
+      <div class="row">
+        <button class="primary" id="btn-analyze">Analyze Music</button>
+        <button id="btn-reanalyze">Re-analyze</button>
+        <button class="danger" id="btn-clear">Clear analysis</button>
+      </div>
+    </div>
+    <p class="small muted">Shotstack <span class="mono">analyse_music</span> ist kostenlos. Danach deutet Claude die Messwerte (Struktur, Key Moments), und der Code prüft jede Deutung gegen die Messwerte. Es wird nichts geschnitten oder gerendert.</p>
+    <div class="log" id="log" aria-live="polite">Bereit.</div>
+  </section>
+
+  <div id="results"></div>
+</div>
+
+<script>
+// ===== CORE-BEGIN: pure functions on Shotstack data (no AI, testable) =====
+const r3 = x => Math.round(x * 1000) / 1000;
+const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
+const quant = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * (s.length - 1)))]; };
+const nearestDist = (arr, x) => arr.reduce((m, v) => Math.min(m, Math.abs(v - x)), Infinity);
+
+// Normalise both Shotstack shapes (steady grid / beat lists) into one model; record where every value comes from
+function modelOf(raw) {
+  const prov = {}, has = k => raw[k] !== undefined && raw[k] !== null;
+  const duration = +raw.duration;
+  const energy = raw.bars?.energy || [];
+  let barStarts = [], beats = [], downbeats = [];
+  if (raw.steady && has("bar") && has("beat")) {
+    // bar n starts at bars.start + n × bar: this matches the bar/time pairs Shotstack returns in sections and drops
+    const b0 = raw.bars?.start ?? raw.origin ?? 0;
+    for (let i = 0; i < (raw.bars?.count ?? energy.length); i++) barStarts.push(r3(b0 + i * raw.bar));
+    for (let t = raw.origin ?? b0; t < duration - 1e-3; t += raw.beat) beats.push(r3(t));
+    downbeats = barStarts.slice();
+    prov.beats = "grid"; prov.downbeats = "grid";
+  } else {
+    beats = (raw.beats || []).map(Number); downbeats = (raw.downbeats || []).map(Number).filter((t, i, a) => i === 0 || t - a[i - 1] > 0.3);
+    const b0 = raw.bars?.start ?? downbeats[0] ?? 0;
+    barStarts = downbeats.filter(t => t >= b0 - 0.05).slice(0, raw.bars?.count ?? energy.length);
+    prov.beats = raw.beats ? "shot" : "na"; prov.downbeats = raw.downbeats ? "shot" : "na";
+  }
+  const bars = barStarts.map((t, i) => ({ i, t, end: r3(barStarts[i + 1] ?? Math.min(duration, t + (raw.bar || (barStarts[1] - barStarts[0]) || 2))), e: energy[i] ?? null }));
+  const barLen = raw.bar || quant(bars.slice(1).map((b, i) => b.t - bars[i].t), 0.5) || 2;
+  return { duration, bpm: raw.bpm ?? null, steady: !!raw.steady, meter: raw.meter ?? null, barLen: r3(barLen), beatLen: raw.beat ?? (raw.bpm ? r3(60 / raw.bpm) : null),
+    origin: raw.origin ?? null, barsStart: raw.bars?.start ?? null, bars, beats, downbeats, sections: raw.sections || [], drops: raw.drops || [], precision: raw.precision || null, downbeat: raw.downbeat || null, prov };
+}
+// Derived facts (code) from bars.energy, sections and drops: labelled as derived everywhere
+function derive(m) {
+  const E = m.bars.map(b => b.e ?? 0), med = quant(E, 0.5), p75 = quant(E, 0.75), p25 = quant(E, 0.25);
+  const jumps = []; m.bars.forEach((b, i) => { if (i && b.e != null && m.bars[i - 1].e != null) { const d = b.e - m.bars[i - 1].e; if (Math.abs(d) >= 0.25) jumps.push({ t: b.t, bar: i, delta: r3(d) }); } });
+  const low = []; let run = null;
+  m.bars.forEach((b, i) => { const isLow = b.e != null && b.e <= Math.min(0.3, p25); if (isLow) { if (!run) run = { from: b.t, bar: i, n: 0 }; run.n++; run.to = b.end; } else if (run) { low.push(run); run = null; } }); if (run) low.push(run);
+  const peaks = m.bars.filter((b, i) => b.e != null && b.e >= Math.max(0.9, p75) && (i === 0 || b.e >= (m.bars[i - 1].e ?? 0)) && (i === m.bars.length - 1 || b.e >= (m.bars[i + 1].e ?? 0))).map(b => ({ t: b.t, bar: b.i, e: b.e }));
+  return { median: r3(med), p75: r3(p75), p25: r3(p25), jumps, low, peaks };
+}
+const STYLE_W = {
+  neutral:   { start: .15, build: .15, peak: .20, accents: .10, ending: .15, variation: .10, fit: .15, flow: 0,   release: 0 },
+  elegant:   { start: .15, build: .05, peak: .05, accents: .00, ending: .20, variation: .05, fit: .25, flow: .25, release: 0 },
+  dynamic:   { start: .10, build: .05, peak: .15, accents: .25, ending: .10, variation: .10, fit: .25, flow: 0,   release: 0 },
+  cinematic: { start: .10, build: .25, peak: .20, accents: .05, ending: .10, variation: .05, fit: .05, flow: 0,   release: .20 }
+};
+const STYLE_TARGET = { neutral: 0.7, elegant: 0.55, dynamic: 0.85, cinematic: 0.68 };
+const clamp01 = x => Math.max(0, Math.min(1, x));
+// Score one continuous excerpt [start, start + L): sub-scores 0-10 from Shotstack energy, sections and drops only
+function scoreWindow(m, d, start, L, style = "neutral") {
+  const end = start + L, win = m.bars.filter(b => b.t >= start - 1e-3 && b.t < end - 1e-3 && b.e != null);
+  if (win.length < 4 || end > m.duration + 0.01) return null;
+  const E = win.map(b => b.e), n = E.length, q = k => E.slice(Math.floor(k * n), Math.max(Math.floor(k * n) + 1, Math.floor((k + 0.25) * n)));
+  const secIn = m.sections.filter(s => s.time > start + 0.1 && s.time < end - 0.1), dropsIn = m.drops.filter(x => x.time > start + 0.1 && x.time < end - 0.1);
+  const at = (list, t, tol) => list.find(s => Math.abs(s.time - t) <= tol);
+  const startSec = at(m.sections, start, 0.15), intro = mean(E.slice(0, 2));
+  let start10 = 6 + (startSec ? 3 : 0) + (start < m.barLen * 1.5 ? 2 : 0) + (intro <= mean(E) ? 1 : 0) - (intro < 0.15 && !startSec ? 2 : 0);
+  const build10 = 10 * clamp01((Math.max(mean(q(0.25)), mean(q(0.5))) - intro) / 0.4) * 0.7 + (secIn.some(s => s.change === "rise" && s.time < start + 0.6 * L) ? 3 : 0);
+  let pk = 0; E.forEach((e, i) => { if (e > E[pk]) pk = i; });
+  const peakPos = (win[pk].t - start) / L, peakE = E[pk];
+  const peak10 = 10 * clamp01(peakE / Math.max(d.p75, 0.01)) * (1 - 0.6 * Math.abs(peakPos - 0.65)) + (dropsIn.length ? 2 : 0) - (peakE < d.median ? 3 : 0);
+  const jumpsIn = d.jumps.filter(j => j.t > start + 0.1 && j.t < end - 0.1 && j.delta > 0);
+  const accents10 = Math.min(10, 2 + 3 * dropsIn.length + 2 * secIn.filter(s => s.change === "rise").length + 1.5 * jumpsIn.length);
+  const gridEnds = m.bars.map(b => b.t).concat([m.duration]), endGap = nearestDist(gridEnds, end), endSec = at(m.sections, end, m.barLen * 0.6), lastE = mean(E.slice(-2));
+  const ending10 = Math.min(10, 2 + (endGap <= 0.15 ? 3 : endGap <= m.barLen / 4 ? 1.5 : 0) + (endSec ? 3 : 0) + (Math.abs(m.duration - end) < 0.5 ? 4 : 0) + (lastE < peakE - 0.15 ? 2 : 0));
+  const sd = Math.sqrt(mean(E.map(e => (e - mean(E)) ** 2)));
+  const variation10 = 10 * clamp01(sd / 0.22);
+  const fit10 = 10 * clamp01(1 - Math.abs(mean(E) - STYLE_TARGET[style]) / 0.45);
+  const dE = E.slice(1).map((e, i) => Math.abs(e - E[i]));
+  const flow10 = 10 * clamp01(1 - (mean(dE) - 0.05) / 0.25) - (Math.max(0, ...dE) > 0.45 ? 2 : 0);
+  const release10 = 10 * clamp01((peakE - lastE) / 0.35) * (peakPos < 0.9 ? 1 : 0.3) + (secIn.some(s => s.change === "fall" && s.time > start + 0.6 * L) || (endSec && endSec.change === "fall") ? 3 : 0);
+  const sub = { start: start10, build: build10, peak: peak10, accents: accents10, ending: ending10, variation: variation10, fit: fit10, flow: flow10, release: release10 };
+  for (const k in sub) sub[k] = Math.round(Math.max(0, Math.min(10, sub[k])) * 10) / 10;
+  const W = STYLE_W[style], score = Object.keys(W).reduce((s, k) => s + W[k] * sub[k], 0);
+  return { start: r3(start), end: r3(end), length: L, style, score: Math.round(score * 10) / 10, sub,
+    facts: { startSection: startSec || null, introEnergy: r3(intro), peak: { t: win[pk].t, e: peakE, pos: r3(peakPos) }, sectionsIn: secIn, dropsIn, risesByJump: jumpsIn.length, endGap: r3(endGap), endSection: endSec || null, lastEnergy: r3(lastE), meanEnergy: r3(mean(E)), sd: r3(sd) } };
+}
+// Best continuous excerpts: every bar start is a candidate start; keep distinct starts (at least 4 bars apart)
+function candidates(m, d, L, style = "neutral", n = 3) {
+  const all = m.bars.map(b => scoreWindow(m, d, b.t, L, style)).filter(Boolean).sort((a, b) => b.score - a.score);
+  const out = []; for (const c of all) { if (out.every(o => Math.abs(o.start - c.start) >= m.barLen * 4 - 0.01)) out.push(c); if (out.length >= n) break; }
+  return out;
+}
+const HIGH = new Set(["high_energy", "peak", "main"]), LOW = new Set(["intro", "break", "release", "outro"]);
+// Check Claude's interpretation against the Shotstack data: snap to bar lines, coverage, energy plausibility, evidence for key moments
+function checkInterpretation(m, d, it) {
+  const grid = [0, ...m.bars.map(b => b.t), m.duration], flags = [];
+  const snapT = t => { const g = grid.reduce((best, x) => Math.abs(x - t) < Math.abs(best - t) ? x : best, grid[0]); return Math.abs(g - t) <= 0.2 ? { t: g, ok: true } : { t, ok: false }; };
+  const segs = (it.segments || []).map((s, i) => {
+    const a = snapT(+s.from), b = snapT(+s.to), own = [];
+    if (!a.ok || !b.ok) own.push("Grenze liegt nicht auf einem Taktanfang.");
+    const inBars = m.bars.filter(x => x.t >= a.t - 1e-3 && x.t < b.t - 1e-3 && x.e != null), me = r3(mean(inBars.map(x => x.e)));
+    if (inBars.length && HIGH.has(s.label) && me < d.median) own.push(`„${s.label}“, aber mittlere Energie ${me} liegt unter dem Median ${d.median}.`);
+    if (inBars.length && LOW.has(s.label) && me > d.p75) own.push(`„${s.label}“, aber mittlere Energie ${me} liegt über dem oberen Quartil ${d.p75}.`);
+    return { ...s, from: a.t, to: b.t, meanEnergy: inBars.length ? me : null, bars: inBars.length, flags: own };
+  }).sort((x, y) => x.from - y.from);
+  if (segs.length) {
+    if (segs[0].from > 0.05 + (m.bars[0]?.t ?? 0)) flags.push(`Struktur beginnt erst bei ${segs[0].from}s.`);
+    if (Math.abs(segs[segs.length - 1].to - m.duration) > m.barLen) flags.push(`Struktur endet bei ${segs[segs.length - 1].to}s, der Track dauert ${r3(m.duration)}s.`);
+    segs.forEach((s, i) => { if (i && Math.abs(s.from - segs[i - 1].to) > 0.05) flags.push(`Lücke oder Überlappung zwischen ${segs[i - 1].to}s und ${s.from}s.`); });
+  } else flags.push("Keine Struktur geliefert.");
+  const moments = (it.keyMoments || []).map(k => {
+    const t = +k.time, own = [];
+    const sec = m.sections.find(s => Math.abs(s.time - t) <= 0.1), drop = m.drops.find(x => Math.abs(x.time - t) <= 0.1), bar = m.bars.find(b => Math.abs(b.t - t) <= 0.1);
+    const jump = d.jumps.find(j => Math.abs(j.t - t) <= 0.1), pk = d.peaks.find(p => Math.abs(p.t - t) <= 0.1);
+    let evidence = drop ? "drops[]" : sec ? `sections[] (${sec.change})` : jump ? `bars.energy Sprung ${jump.delta > 0 ? "+" : ""}${jump.delta}` : pk ? `bars.energy Spitze ${pk.e}` : bar ? `Taktanfang ${bar.i}, Energie ${bar.e}` : null;
+    if (k.type === "drop" && !drop) own.push("Shotstack meldet hier keinen Drop.");
+    if (!evidence) own.push("Kein Shotstack-Wert an dieser Stelle.");
+    return { ...k, time: r3(t), evidence, flags: own };
+  }).sort((x, y) => x.time - y.time);
+  return { segments: segs, moments, flags };
+}
+// ===== CORE-END =====
+</script>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const fx = (x, d = 2) => (x == null || !isFinite(+x)) ? "–" : (+x).toFixed(d);
+  const sec = x => `${fx(x)}s`;
+  const fmtDate = iso => { try { return new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return iso || "–"; } };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const log = (msg, cls) => { const el = $("log"); if (el.textContent === "Bereit.") el.textContent = ""; const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = `${new Date().toLocaleTimeString("de-DE")}  ${msg}`; el.appendChild(d); el.scrollTop = el.scrollHeight; };
+  const SRC = { shot: ["shot", "Shotstack"], grid: ["grid", "Shotstack-Raster"], code: ["code", "Code"], claude: ["claude", "Claude"] };
+  const tag = k => `<span class="src ${SRC[k][0]}">${SRC[k][1]}</span>`;
+  const LBL = { intro: "Intro", build: "Build", high_energy: "High Energy", peak: "Peak", break: "Break", main: "Hauptteil", release: "Release", outro: "Outro", transition: "Übergang", other: "Sonstiges" };
+  const SEGVAR = { intro: "--s-intro", build: "--s-build", high_energy: "--s-high", peak: "--s-peak", break: "--s-break", main: "--s-main", release: "--s-release", outro: "--s-outro", transition: "--s-other", other: "--s-other" };
+  const MOM = { strong_beat: "starker Beat", peak: "Peak", drop: "Drop", break: "Break", build: "Build", release: "Release", section_change: "Wechsel" };
+  const LENGTHS = [23, 25, 27, 30];
+  const MAP_X0 = 74, MAP_X1 = 984; // map drawing area inside the 1000-wide viewBox, left part holds the row labels
+  const STYLES = [["neutral", "Neutral"], ["elegant", "Elegant"], ["dynamic", "Dynamic"], ["cinematic", "Cinematic"]];
+  const S = { db: null, mcp: null, sample: null, tracks: [], analyses: {}, sel: null, style: "neutral", custom: null, busy: false, pick: null, confirmClear: false, stopAt: null };
+  try { S.style = localStorage.getItem("musicStyle") || "neutral"; } catch {}
+
+  // ---------- boot ----------
+  function setCap(id, ok, label) { const el = $(id); el.className = "chip " + (ok ? "on" : "off"); el.lastChild.textContent = label; }
+  async function boot() {
+    const use = n => (window.claude?.use ? window.claude.use(n).catch(() => null) : Promise.resolve(null));
+    [S.db, S.mcp, S.sample] = await Promise.all([use("db"), use("mcp"), use("sample")]);
+    setCap("cap-mcp", !!S.mcp, S.mcp ? "Shotstack" : "Shotstack fehlt"); setCap("cap-sample", !!S.sample, S.sample ? "Claude" : "Claude fehlt"); setCap("cap-db", !!S.db, S.db ? "Speicher" : "Speicher fehlt");
+    const miss = [];
+    if (!S.mcp) miss.push("Ohne Shotstack-Connector kann nicht analysiert werden. Öffne die Seite in claude.ai mit verbundenem Shotstack.");
+    if (!S.sample) miss.push("Ohne Claude gibt es nur die Messwerte und die berechneten Abschnitte, keine Struktur-Deutung.");
+    if (!S.db) miss.push("Ohne Speicher gehen Analysen beim Neuladen verloren.");
+    if (miss.length) { $("nocaps").hidden = false; $("nocaps").textContent = miss.join(" "); }
+    if (S.db) {
+      S.db.collection("tracks").onSnapshot(qs => { S.tracks = qs.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.created < b.created ? 1 : -1)); if (!S.sel || !S.tracks.some(t => t.id === S.sel)) { let saved = null; try { saved = localStorage.getItem("musicTrack"); } catch {} S.sel = (S.tracks.find(t => t.id === saved) || S.tracks[0])?.id || null; } render(); });
+      S.db.collection("analyses").onSnapshot(qs => { S.analyses = Object.fromEntries(qs.docs.map(d => [d.id, d.data()])); render(); });
+    }
+    render();
+  }
+  async function save(id, data) { S.analyses[id] = data; if (S.db) await S.db.collection("analyses").doc(id).set(data); render(); }
+  async function clearA(id) { delete S.analyses[id]; if (S.db) await S.db.collection("analyses").doc(id).delete(); render(); }
+  const track = () => S.tracks.find(t => t.id === S.sel) || null;
+
+  // ---------- input ----------
+  $("btn-url").addEventListener("click", async () => {
+    const url = $("url-input").value.trim();
+    if (!/^https:\/\/\S+$/i.test(url)) { log("Bitte eine öffentliche https-URL zu einer Audiodatei einfügen.", "warn"); return; }
+    const name = decodeURIComponent(url.split("?")[0].split("/").pop() || "track");
+    const id = "u" + Date.now().toString(36);
+    const doc = { filename: name, kind: "music", url, source: "url", created: new Date().toISOString(), duration: null, extension: (name.split(".").pop() || "").toLowerCase() };
+    S.tracks.unshift({ id, ...doc }); if (S.db) await S.db.collection("tracks").doc(id).set(doc);
+    S.sel = id; $("url-input").value = ""; log(`${name} hinzugefügt.`); render();
+  });
+  document.addEventListener("change", e => {
+    if (e.target.name === "track") { S.sel = e.target.value; S.pick = null; S.confirmClear = false; try { localStorage.setItem("musicTrack", S.sel); } catch {} render(); }
+    if (e.target.id === "custom-len") { const v = +e.target.value; S.custom = v >= 10 && v <= 120 ? v : null; render(); }
+  });
+
+  // ---------- analysis ----------
+  async function shotstack(url) {
+    const call = async (tool, input) => { try { return (await S.mcp.callTool("shotstack", tool, input, { cache: false })).payload; } catch (e) { throw new Error(mcpMsg(e)); } };
+    log("Shotstack analyse_music läuft (kostenlos, 15–30 s) …");
+    let res = await call("analyse_music", { src: url }), polls = 0;
+    while (res && res.status !== "done") {
+      if (res.status === "failed") throw new Error("Shotstack: " + (res.error || "Analyse fehlgeschlagen"));
+      if (++polls > 24) throw new Error("Shotstack-Analyse wurde nach 2 Minuten nicht fertig.");
+      await sleep(5000); res = await call("get_analysis_status", { id: res.id });
+    }
+    if (!res?.result) throw new Error("Shotstack hat kein Ergebnis geliefert.");
+    return { id: res.id || null, result: res.result, polls };
+  }
+  function mcpMsg(e) { return ({ server_not_connected: "Der Shotstack-Connector ist nicht verbunden.", needs_reauth: "Der Shotstack-Connector muss neu verbunden werden.", approval_required: "Der Shotstack-Aufruf wurde nicht freigegeben.", not_in_manifest: "Dieses Shotstack-Werkzeug ist für die Seite nicht freigegeben.", server_unavailable: "Shotstack ist gerade nicht erreichbar." }[e?.code] || `Shotstack-Aufruf fehlgeschlagen (${e?.code || "Fehler"}): ${e?.message || e}`); }
+  function interpPrompt(t, m, d, picks) {
+    return `You interpret a measured music analysis for a later real-estate video director. The numbers below were measured by Shotstack; they are the only facts you have. Do not invent beats, drops, tempo changes or other values. Every claim must point to these numbers.
+
+Track "${t.filename}", duration ${fx(m.duration, 3)} s, bpm ${m.bpm ?? "not available"}, steady tempo: ${m.steady}, meter ${m.meter ?? "not available"}, bar length ${m.barLen} s.
+Bars [index, start time s, energy 0-1] (Shotstack bars.energy): ${JSON.stringify(m.bars.map(b => [b.i, b.t, b.e]))}
+Sections (Shotstack, change at bar): ${JSON.stringify(m.sections)}
+Drops (Shotstack): ${JSON.stringify(m.drops)}${m.drops.length ? "" : " (none: do not describe any drop)"}
+Derived by code from bars.energy: median ${d.median}, upper quartile ${d.p75}; energy jumps of at least 0.25 between bars ${JSON.stringify(d.jumps)}; quiet runs ${JSON.stringify(d.low.map(r => ({ from: r.from, to: r.to, bars: r.n })))}; local peaks ${JSON.stringify(d.peaks)}.
+
+1. Segment the whole song from 0 to ${fx(m.duration, 3)} s into consecutive sections. Boundaries must be bar start times from the list (the first may start at 0, the last ends at the track end). Labels: intro, build, high_energy, peak, break, main, release, outro, transition, other. Base every label on energy, sections and drops, and name the evidence (bar indices, energy values, section changes).
+2. Key moments: only at times that exist in the data (a section time, a drop time, or a bar start with a notable energy value or jump). Types: strong_beat, peak, drop (only a Shotstack drop), break, build, release, section_change.
+3. Short notes on these computed continuous excerpts (the code scored them from the same data; say in one sentence each how musically convincing the start, the peak and the ending are): ${JSON.stringify(picks.map(p => ({ id: p.id, start: p.start, end: p.end, length: p.length, score: p.score })))}
+
+Write every free-text value in German. Return JSON only:
+{"summary": string (3-4 sentences: overall shape of the song),
+ "segments": [{"from": number, "to": number, "label": string, "title": string (2-4 words), "evidence": string (max 25 words)}],
+ "keyMoments": [{"time": number, "type": string, "note": string (max 15 words), "evidence": string (max 15 words)}],
+ "candidateNotes": [{"id": string, "note": string (max 25 words)}],
+ "caveats": string (what the data cannot tell, or "")}`;
+  }
+  async function analyze(force) {
+    const t = track(); if (!t || S.busy) return;
+    if (!force && S.analyses[t.id]?.raw) { log("Analyse liegt bereits vor. Für eine neue Analyse „Re-analyze“ wählen."); return; }
+    S.busy = true; render();
+    const doc = { trackId: t.id, filename: t.filename, url: t.url, analyzedAt: new Date().toISOString() };
+    try {
+      const sh = await shotstack(t.url);
+      Object.assign(doc, { raw: sh.result, shotstackId: sh.id, polls: sh.polls, fields: Object.keys(sh.result), shotstackOk: true });
+      log(`Shotstack fertig: ${Object.keys(sh.result).length} Felder, ${sh.result.bars?.count ?? "?"} Takte.`, "ok");
+      const m = modelOf(sh.result), d = derive(m);
+      doc.candidates = Object.fromEntries(STYLES.map(([st]) => [st, Object.fromEntries(LENGTHS.map(L => [L, candidates(m, d, L, st)]))]));
+      if (S.sample) {
+        log("Claude deutet die Messwerte (Struktur, Key Moments) …");
+        const picks = LENGTHS.flatMap(L => doc.candidates.neutral[L].map((c, i) => ({ id: `${L}s-${"ABC"[i]}`, ...c })));
+        try {
+          doc.interpretation = await S.sample.json(interpPrompt(t, m, d, picks), { modelTier: "complex", cache: false });
+          doc.interpretedAt = new Date().toISOString();
+          const chk = checkInterpretation(m, d, doc.interpretation), nf = chk.flags.length + chk.segments.reduce((a, s) => a + s.flags.length, 0) + chk.moments.reduce((a, k) => a + k.flags.length, 0);
+          log(`Claude fertig: ${chk.segments.length} Abschnitte, ${chk.moments.length} Key Moments, ${nf} Abweichung${nf === 1 ? "" : "en"} von den Messwerten.`, nf ? "warn" : "ok");
+        } catch (e) { doc.interpError = `${e?.code || "Fehler"}: ${e?.message || e}`; log("Claude-Deutung fehlgeschlagen: " + doc.interpError, "bad"); }
+      }
+      await save(t.id, doc);
+    } catch (e) { log(e.message || String(e), "bad"); doc.shotstackOk = false; doc.error = e.message || String(e); if (!S.analyses[t.id]?.raw) await save(t.id, doc); }
+    finally { S.busy = false; render(); }
+  }
+  $("btn-analyze").addEventListener("click", () => analyze(false));
+  $("btn-reanalyze").addEventListener("click", () => analyze(true));
+  $("btn-clear").addEventListener("click", async () => {
+    const t = track(); if (!t) return;
+    if (!S.confirmClear) { S.confirmClear = true; render(); return; }
+    S.confirmClear = false; await clearA(t.id); log(`Analyse von ${t.filename} gelöscht.`);
+  });
+
+  // ---------- player ----------
+  const player = $("player");
+  player.addEventListener("timeupdate", () => { if (S.stopAt != null && player.currentTime >= S.stopAt) { player.pause(); S.stopAt = null; } movePlayhead(); });
+  function seekTo(t, stopAt) { const tr = track(); if (!tr) return; if (player.dataset.src !== tr.url) { player.src = tr.url; player.dataset.src = tr.url; } player.currentTime = t; S.stopAt = stopAt ?? null; player.play().catch(() => {}); }
+  function movePlayhead() { const ph = document.getElementById("playhead"), a = S.analyses[S.sel]; if (!ph || !a?.raw) return; const x = MAP_X0 + (player.currentTime / a.raw.duration) * (MAP_X1 - MAP_X0); ph.setAttribute("x1", x); ph.setAttribute("x2", x); }
+  document.addEventListener("click", e => {
+    const svg = e.target.closest("svg#map");
+    if (svg) { const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * 1000, a = S.analyses[S.sel]; if (a?.raw && x >= MAP_X0 && x <= MAP_X1) seekTo((x - MAP_X0) / (MAP_X1 - MAP_X0) * a.raw.duration); return; }
+    const b = e.target.closest("button[data-act]"); if (!b) return;
+    if (b.dataset.act === "play") seekTo(+b.dataset.start, +b.dataset.end);
+    if (b.dataset.act === "show") { S.pick = S.pick === b.dataset.key ? null : b.dataset.key; render(); }
+    if (b.dataset.act === "style") { S.style = b.dataset.style; try { localStorage.setItem("musicStyle", S.style); } catch {} render(); }
+  });
+
+  // ---------- render ----------
+  function render() {
+    const t = track(), a = t ? S.analyses[t.id] : null;
+    $("btn-analyze").disabled = S.busy || !S.mcp || !t || !!a?.raw;
+    $("btn-reanalyze").disabled = S.busy || !S.mcp || !t || !a?.raw;
+    $("btn-clear").disabled = S.busy || !a;
+    $("btn-clear").textContent = S.confirmClear ? "Wirklich löschen?" : "Clear analysis";
+    $("tracks").innerHTML = S.tracks.length ? S.tracks.map(x => { const an = S.analyses[x.id];
+      return `<label class="track"><input type="radio" name="track" value="${esc(x.id)}" ${x.id === S.sel ? "checked" : ""}><span><span class="name">${esc(x.filename)}</span><br><span class="facts">${x.duration ? `${(+x.duration).toFixed(2)} s` : (an?.raw ? `${an.raw.duration.toFixed(2)} s` : "Dauer unbekannt")} · ${esc((x.extension || x.filename.split(".").pop() || "").toUpperCase())}${x.filesize ? ` · ${(x.filesize / 1048576).toFixed(1)} MB` : ""} · ${x.created ? `hochgeladen ${fmtDate(x.created)}` : "Upload-Zeit unbekannt"}${x.source === "url" ? " · per URL" : ""}</span></span>
+        <span class="status ${an?.raw ? "" : "muted"}">${an?.raw ? `analysiert ${fmtDate(an.analyzedAt)}` : an?.error ? "Fehler" : "nicht analysiert"}</span></label>`; }).join("")
+      : `<p class="empty">Noch keine Tracks. Lade Musik in Shotstack hoch und sag im Chat „sync“, oder füge unten eine öffentliche URL ein.</p>`;
+    if (t && player.dataset.src !== t.url) { player.src = t.url; player.dataset.src = t.url; }
+    $("results").innerHTML = !t ? "" : !a ? `<section class="panel"><div class="empty">Noch keine Analyse für ${esc(t.filename)}. „Analyze Music“ startet die kostenlose Shotstack-Analyse.</div></section>`
+      : !a.raw ? `<section class="panel"><p class="notice">Analyse fehlgeschlagen: ${esc(a.error)}</p></section>` : results(t, a);
+    movePlayhead();
+  }
+
+  function mapSVG(m, d, chk, a, pickWin) {
+    const X0 = MAP_X0, X1 = MAP_X1, W = X1 - X0, D = m.duration, x = t => X0 + (t / D) * W;
+    const yS = 22, hS = 26, yE = 60, hE = 92, yB = 160, hB = 26, out = [];
+    // axis
+    const step = D > 150 ? 20 : 10;
+    for (let s = 0; s <= D; s += step) out.push(`<line x1="${x(s)}" x2="${x(s)}" y1="${yS - 4}" y2="${yB + hB + 6}" stroke="var(--line)" stroke-width="1"/><text x="${x(s)}" y="${yB + hB + 20}" text-anchor="middle">${s}s</text>`);
+    // Claude segments
+    for (const s of chk?.segments || []) { const w = Math.max(1, x(s.to) - x(s.from)); out.push(`<rect x="${x(s.from)}" y="${yS}" width="${w}" height="${hS}" rx="3" fill="var(${SEGVAR[s.label] || "--s-other"})"><title>${esc(`${fx(s.from)}–${fx(s.to)}s ${LBL[s.label] || s.label}: ${s.title}`)}</title></rect>`); if (w > 46) out.push(`<text class="seglabel" x="${x(s.from) + 5}" y="${yS + 17}">${esc((s.title || LBL[s.label] || s.label).slice(0, Math.floor(w / 6.5)))}</text>`); }
+    if (!chk?.segments?.length) out.push(`<text x="${X0}" y="${yS + 17}">Struktur: noch keine Claude-Deutung</text>`);
+    // energy per bar
+    for (const b of m.bars) if (b.e != null) { const h = Math.max(1, b.e * hE); out.push(`<rect x="${x(b.t) + 0.5}" y="${yE + hE - h}" width="${Math.max(1, x(b.end) - x(b.t) - 1)}" height="${h}" fill="var(--energy)" opacity="0.78"><title>Takt ${b.i} · ${fx(b.t)}s · Energie ${b.e}</title></rect>`); }
+    for (const r of d.low) out.push(`<rect x="${x(r.from)}" y="${yE}" width="${Math.max(1, x(r.to) - x(r.from))}" height="${hE}" fill="none" stroke="var(--fall)" stroke-dasharray="3 3"><title>leiser Bereich (Code) ${fx(r.from)}–${fx(r.to)}s</title></rect>`);
+    // beats and downbeats
+    for (const t of m.beats) out.push(`<line x1="${x(t)}" x2="${x(t)}" y1="${yB + 12}" y2="${yB + hB}" stroke="var(--beat)" stroke-width="0.6"/>`);
+    for (const t of m.downbeats) out.push(`<line x1="${x(t)}" x2="${x(t)}" y1="${yB}" y2="${yB + hB}" stroke="var(--down)" stroke-width="1"/>`);
+    // sections, drops, key moments
+    for (const s of m.sections) out.push(`<line x1="${x(s.time)}" x2="${x(s.time)}" y1="${yS - 6}" y2="${yB + hB}" stroke="var(--${s.change === "fall" ? "fall" : "rise"})" stroke-width="2"><title>Section ${s.change} · Takt ${s.bar} · ${fx(s.time, 3)}s</title></line><text x="${x(s.time) + 3}" y="${yE + 10}" style="fill:var(--${s.change === "fall" ? "fall" : "rise"})">${s.change === "fall" ? "▼" : "▲"} ${fx(s.time, 1)}</text>`);
+    for (const p of m.drops) out.push(`<path d="M${x(p.time) - 6},${yE - 8} L${x(p.time) + 6},${yE - 8} L${x(p.time)},${yE + 2} Z" fill="var(--drop)"><title>Drop · ${fx(p.time, 3)}s</title></path>`);
+    for (const k of chk?.moments || []) out.push(`<circle cx="${x(k.time)}" cy="${yS + hS + 6}" r="4" fill="var(--moment)" stroke="var(--panel)" stroke-width="1"><title>${esc(`${fx(k.time)}s ${MOM[k.type] || k.type}: ${k.note}`)}</title></circle>`);
+    if (pickWin) out.push(`<rect x="${x(pickWin.start)}" y="${yS - 8}" width="${x(pickWin.end) - x(pickWin.start)}" height="${yB + hB - yS + 14}" fill="var(--pick)" stroke="var(--accent)" stroke-width="1.5" rx="4"/>`);
+    out.push(`<line id="playhead" x1="${X0}" x2="${X0}" y1="${yS - 8}" y2="${yB + hB + 6}" stroke="var(--ink)" stroke-width="1.5"/>`);
+    out.push(`<text x="4" y="${yS + 17}">Struktur</text><text x="4" y="${yE + hE - 4}">Energie</text><text x="4" y="${yB + 18}">Beats</text>`);
+    return `<svg id="map" viewBox="0 0 1000 ${yB + hB + 28}" role="img" aria-label="Musikkarte: Energie pro Takt, Beats, Sections und Struktur">${out.join("")}</svg>`;
+  }
+  function reason(c) {
+    const f = c.facts, parts = [];
+    parts.push(f.startSection ? `Start auf Section-Wechsel (${f.startSection.change}) bei ${fx(f.startSection.time)}s` : `Start auf Taktanfang, Energie ${fx(f.introEnergy)}`);
+    if (c.sub.build >= 5) parts.push(`Aufbau bis ${fx(f.peak.e)} Energie`);
+    parts.push(`Peak ${fx(f.peak.e)} bei +${fx(f.peak.pos * c.length, 1)}s`);
+    if (f.dropsIn.length) parts.push(`${f.dropsIn.length} Drop`);
+    if (f.sectionsIn.length) parts.push(`${f.sectionsIn.length} Section-Wechsel im Abschnitt`);
+    parts.push(Math.abs(c.end - (f.endSection?.time ?? -9)) < 1.2 ? `Ende nahe Section-Wechsel (${f.endSection.change})` : f.endGap <= 0.15 ? "Ende auf Taktanfang" : `Ende ${fx(f.endGap)}s neben dem Taktraster`);
+    return parts.join(" · ");
+  }
+  function results(t, a) {
+    const m = modelOf(a.raw), d = derive(m), it = a.interpretation, chk = it ? checkInterpretation(m, d, it) : null, raw = a.raw;
+    const fields = new Set(Object.keys(raw));
+    const sty = S.style, lens = [...LENGTHS, ...(S.custom && !LENGTHS.includes(S.custom) ? [S.custom] : [])];
+    const cands = Object.fromEntries(lens.map(L => [L, a.candidates?.[sty]?.[L] || candidates(m, d, L, sty)]));
+    const pickC = S.pick ? Object.values(cands).flat().find(c => `${c.length}-${c.start}` === S.pick) : null;
+    const notes = Object.fromEntries((it?.candidateNotes || []).map(n => [n.id, n.note]));
+    const neutralId = c => { const i = (a.candidates?.neutral?.[c.length] || []).findIndex(x => x.start === c.start); return i >= 0 ? `${c.length}s-${"ABC"[i]}` : null; };
+    const stat = (label, v, src, na) => `<div class="stat"><span class="label">${label} ${tag(src)}</span><span class="v ${na ? "na" : ""}">${v}</span></div>`;
+    const totalFlags = chk ? chk.flags.length + chk.segments.reduce((s, x) => s + x.flags.length, 0) + chk.moments.reduce((s, x) => s + x.flags.length, 0) : 0;
+    // field table: what Shotstack delivered and what it does not deliver
+    const F = (name, present, value, src, note) => `<tr><td class="mono">${name}</td><td>${present ? tag(src) : `<span class="muted">not available</span>`}</td><td class="${present ? "" : "na"}">${value}</td><td class="small muted">${note || ""}</td></tr>`;
+    const list = (arr, n = 8) => arr.length ? `${arr.length} Werte: ${arr.slice(0, n).map(x => fx(x, 3)).join(", ")}${arr.length > n ? " …" : ""}` : "leer";
+    const ftable = [
+      F("duration", fields.has("duration"), sec(raw.duration), "shot"),
+      F("bpm", fields.has("bpm"), fx(raw.bpm), "shot"),
+      F("steady", fields.has("steady"), String(raw.steady), "shot", "true: festes Tempo, Beats als Raster; false: Beat-Listen"),
+      F("meter", fields.has("meter"), raw.meter ?? "", "shot", "Schläge pro Takt"),
+      F("beat / bar", fields.has("beat") || fields.has("bar"), `${fx(raw.beat, 4)}s / ${fx(raw.bar, 4)}s`, "shot"),
+      F("origin", fields.has("origin"), sec(raw.origin), "shot", raw.bars?.start != null && raw.origin != null && Math.abs(raw.bars.start - raw.origin) > 0.01 ? `Weicht von bars.start (${fx(raw.bars.start, 3)}s) ab. Die Seite nutzt bars.start als ersten Taktanfang, weil die Section-Zeiten dazu passen.` : ""),
+      F("downbeat", fields.has("downbeat"), raw.downbeat ? `offset ${raw.downbeat.offset} · confidence ${raw.downbeat.confidence}` : "", "shot"),
+      F("bars.start / count", !!raw.bars, raw.bars ? `${sec(raw.bars.start)} · ${raw.bars.count} Takte` : "", "shot"),
+      F("bars.energy", !!raw.bars?.energy, raw.bars?.energy ? `${raw.bars.energy.length} Werte, 0–1, ein Wert pro Takt` : "", "shot", "einziges Lautheits-/Energiemaß"),
+      F("beats[]", fields.has("beats"), fields.has("beats") ? list(raw.beats) : "", "shot", m.steady ? `nur bei steady=false. Hier aus dem Raster berechnet: ${m.beats.length} Beats ${tag("grid")}` : ""),
+      F("downbeats[]", fields.has("downbeats"), fields.has("downbeats") ? list(raw.downbeats) : "", "shot", m.steady ? `nur bei steady=false. Hier aus dem Raster berechnet: ${m.downbeats.length} Taktanfänge ${tag("grid")}` : ""),
+      F("sections[]", fields.has("sections"), `${(raw.sections || []).length}: ${(raw.sections || []).map(s => `${s.change} ${fx(s.time, 1)}s`).join(", ") || "keine"}`, "shot"),
+      F("drops[]", fields.has("drops"), `${(raw.drops || []).length}${raw.drops?.length ? ": " + raw.drops.map(x => fx(x.time, 1) + "s").join(", ") : " (keine erkannt)"}`, "shot"),
+      F("precision", fields.has("precision"), raw.precision ? Object.entries(raw.precision).map(([k, v]) => `${k}: ${v}`).join(" · ") : "", "shot"),
+      F("strong beats", false, "", "shot", `Shotstack liefert keine Beat-Stärke. Ersatz: Taktanfänge ${tag("grid")} und Energiesprünge ${tag("code")}`),
+      F("onsets", false, "", "shot", "nicht im Shotstack-Ergebnis"),
+      F("peaks / accents", false, "", "shot", `Ersatz: lokale Energiespitzen pro Takt ${tag("code")}: ${d.peaks.length}`),
+      F("loudness-Kurve (fein)", false, "", "shot", "nur bars.energy (pro Takt)"),
+      F("tempo / rhythm changes", false, "", "shot", "nur steady true/false"),
+      F("silence / low energy", false, "", "shot", `Ersatz: leise Bereiche aus bars.energy ${tag("code")}: ${d.low.length}`)
+    ].join("");
+    const extra = [...fields].filter(k => !["duration", "bpm", "steady", "meter", "beat", "bar", "origin", "downbeat", "bars", "beats", "downbeats", "sections", "drops", "precision"].includes(k));
+    return `
+    <section class="panel" aria-labelledby="h-track">
+      <div class="row between"><h2 id="h-track">3 · Results · ${esc(t.filename)}</h2><span class="small muted">Shotstack ${fmtDate(a.analyzedAt)}${a.interpretedAt ? ` · Claude ${fmtDate(a.interpretedAt)}` : ""}</span></div>
+      <div class="stats">
+        ${stat("Dauer", sec(m.duration), "shot")}${stat("BPM", fx(m.bpm, 1), "shot", m.bpm == null)}${stat("Takt", `${fx(m.barLen, 3)}s`, m.steady ? "shot" : "code")}
+        ${stat("Takte", m.bars.length, "shot")}${stat("Tempo", m.steady ? "gleichmäßig" : "variabel", "shot")}${stat("Sections", m.sections.length, "shot")}${stat("Drops", m.drops.length || "keine", "shot", !m.drops.length)}
+        ${stat("Downbeat-Sicherheit", raw.downbeat?.confidence != null ? fx(raw.downbeat.confidence) : "not available", "shot", raw.downbeat?.confidence == null)}
+      </div>
+      <div><div class="row between"><span class="label">Energy Timeline · klicken zum Anhören</span>${S.pick && pickC ? `<span class="small">Markiert: ${fx(pickC.start)}–${fx(pickC.end)}s</span>` : ""}</div>
+        <div class="mapbox" style="margin-top:6px">${mapSVG(m, d, chk, a, pickC)}</div>
+        <div class="legend" style="margin-top:6px"><span><i style="background:var(--energy)"></i>Energie pro Takt ${tag("shot")}</span><span><i style="background:var(--down);width:2px"></i>Taktanfang ${tag(m.prov.downbeats === "grid" ? "grid" : "shot")}</span><span><i style="background:var(--beat);width:2px"></i>Beat ${tag(m.prov.beats === "grid" ? "grid" : "shot")}</span><span><i style="background:var(--rise);width:3px"></i>Section rise</span><span><i style="background:var(--fall);width:3px"></i>Section fall ${tag("shot")}</span><span><i style="background:var(--drop)"></i>Drop ${tag("shot")}</span><span><i style="border:1px dashed var(--fall)"></i>leiser Bereich ${tag("code")}</span><span><i style="background:var(--moment);border-radius:50%"></i>Key Moment ${tag("claude")}</span><span><i style="background:var(--s-peak)"></i>Struktur ${tag("claude")}</span></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-struct">
+      <div class="row between"><h2 id="h-struct">Music Structure ${tag("claude")}</h2><span class="small ${totalFlags ? "flag" : "muted"}">${chk ? (totalFlags ? `${totalFlags} Abweichung${totalFlags === 1 ? "" : "en"} von den Messwerten` : "alle Abschnitte und Momente durch Messwerte belegt") : ""}</span></div>
+      ${it ? `<p>${esc(it.summary)}</p>` : `<p class="notice">${a.interpError ? `Claude-Deutung fehlgeschlagen: ${esc(a.interpError)}` : "Keine Claude-Deutung vorhanden."} Messwerte und berechnete Abschnitte unten gelten trotzdem.</p>`}
+      ${chk ? `<div class="cols">
+        <div><span class="label">Segmentierung</span>
+          <ul class="segs" style="margin-top:8px">${chk.segments.map(s => `<li><span class="t">${fx(s.from, 1)}–${fx(s.to, 1)}s</span><i style="background:var(${SEGVAR[s.label] || "--s-other"})"></i><span><b>${esc(LBL[s.label] || s.label)}</b> · ${esc(s.title)} <span class="muted small">· Ø Energie ${s.meanEnergy ?? "–"} ${tag("code")}</span><br><span class="small muted">${esc(s.evidence)}</span>${s.flags.map(f => `<br><span class="flag">Prüfung: ${esc(f)}</span>`).join("")}</span></li>`).join("")}</ul>
+          ${chk.flags.map(f => `<p class="flag">Prüfung: ${esc(f)}</p>`).join("")}
+        </div>
+        <div><span class="label">Key Moments</span>
+          <ul class="moments" style="margin-top:8px">${chk.moments.map(k => `<li><span class="mono">${fx(k.time)}s</span><span><b>${esc(MOM[k.type] || k.type)}</b> · ${esc(k.note)}<br><span class="small muted">Beleg: ${k.evidence ? esc(k.evidence) : "–"} ${k.evidence ? tag("shot") : ""}</span>${k.flags.map(f => `<br><span class="flag">Prüfung: ${esc(f)}</span>`).join("")}</span></li>`).join("") || `<li class="muted">keine</li>`}</ul>
+          ${it.caveats ? `<p class="small muted" style="margin-top:10px">Grenzen laut Claude: ${esc(it.caveats)}</p>` : ""}
+        </div></div>` : ""}
+      <div class="small muted">Gemessene Akzente ${tag("code")}: Energiesprünge ${d.jumps.length ? d.jumps.map(j => `${fx(j.t, 1)}s (${j.delta > 0 ? "+" : ""}${j.delta})`).join(", ") : "keine"} · Energiespitzen ${d.peaks.length ? d.peaks.map(p => `${fx(p.t, 1)}s`).join(", ") : "keine"} · leise Bereiche ${d.low.length ? d.low.map(r => `${fx(r.from, 1)}–${fx(r.to, 1)}s`).join(", ") : "keine"}</div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-cand">
+      <div class="row between"><h2 id="h-cand">Best Continuous Sections ${tag("code")}</h2>
+        <div class="row"><div class="tabs" role="group" aria-label="Stil">${STYLES.map(([k, l]) => `<button data-act="style" data-style="${k}" aria-pressed="${k === sty}">${l}</button>`).join("")}</div>
+        <label class="small muted" for="custom-len">Eigene Länge</label><input type="number" id="custom-len" min="10" max="120" step="1" value="${S.custom ?? ""}" placeholder="s" style="width:76px"></div></div>
+      <p class="small muted">Ein Abschnitt läuft immer am Stück: ein Startpunkt auf einem Taktanfang, Ende = Start + Länge. Keine Sprünge, keine internen Schnitte, kein Loop. Bewertet werden Start, Aufbau, Peak, Akzente, Ende, Variation und Energie zur Länge${sty === "elegant" ? ", bei Elegant zusätzlich ein ruhiger Fluss" : sty === "cinematic" ? ", bei Cinematic zusätzlich Release / Finale" : ""}. Der Stil ändert nur die Gewichtung, er ist keine Schnittvorlage.</p>
+      <div class="lengths">${lens.map(L => { const nb = L / m.barLen, off = Math.abs(nb - Math.round(nb)) * m.barLen, lo = Math.floor(nb) * m.barLen, hi = Math.ceil(nb) * m.barLen;
+        const hint = off > 0.15 ? `${fx(nb, 1)} Takte: endet ${fx(off, 1)}s neben dem Takt. ${fx(lo, 1)}s oder ${fx(hi, 1)}s enden genau auf einem Takt. ${tag("code")}` : `${Math.round(nb)} ganze Takte ${tag("code")}`;
+        return `<div class="len"><h3>${L} s</h3><span class="small muted">${hint}</span>${(cands[L] || []).map((c, i) => { const key = `${c.length}-${c.start}`, nid = sty === "neutral" ? neutralId(c) : null;
+        return `<div class="cand ${S.pick === key ? "sel" : ""}"><div class="head"><span><b>Kandidat ${"ABC"[i]}</b> <span class="mono">${fx(c.start)}–${fx(c.end)}s</span></span><span class="score">${fx(c.score, 1)}<span class="small muted">/10</span></span></div>
+          <span class="why">${esc(reason(c))}</span>
+          <div class="subs">${[["Start", "start"], ["Aufbau", "build"], ["Peak", "peak"], ["Akzente", "accents"], ["Ende", "ending"], ["Variation", "variation"], ["Energie", "fit"], [sty === "elegant" ? "Fluss" : sty === "cinematic" ? "Release" : "", sty === "elegant" ? "flow" : sty === "cinematic" ? "release" : ""]].filter(x => x[0]).map(([l, k]) => `<span>${l} <b>${fx(c.sub[k], 1)}</b></span>`).join("")}</div>
+          ${nid && notes[nid] ? `<span class="claude-note">${esc(notes[nid])} ${tag("claude")}</span>` : ""}
+          <div class="acts"><button data-act="play" data-start="${c.start}" data-end="${c.end}">Anhören</button><button data-act="show" data-key="${key}">${S.pick === key ? "Markierung aus" : "Auf Karte zeigen"}</button></div></div>`; }).join("") || `<span class="small muted">Track zu kurz für ${L} s.</span>`}</div>`; }).join("")}</div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-data">
+      <h2 id="h-data">Technische Musikdaten &amp; Debug</h2>
+      <div class="kv">
+        <span class="muted">Shotstack-Analyse</span><span>${a.shotstackOk ? "erfolgreich" : "fehlgeschlagen"} · Job-ID <span class="mono">${esc(a.shotstackId || "–")}</span> · ${a.polls ? `${a.polls}× Status abgefragt` : "sofort fertig"}</span>
+        <span class="muted">Analysezeitpunkt</span><span>${fmtDate(a.analyzedAt)}${a.interpretedAt ? ` · Claude-Deutung ${fmtDate(a.interpretedAt)}` : ""}</span>
+        <span class="muted">Track / Asset-ID</span><span class="mono">${esc(t.id)}${t.source === "url" ? " (per URL)" : ""}</span>
+        <span class="muted">Geliefert von Shotstack</span><span class="mono small">${[...fields].join(", ")}${extra.length ? ` · unbekannte Zusatzfelder: ${extra.join(", ")}` : ""}</span>
+        <span class="muted">Von Claude gedeutet</span><span>${it ? `Struktur (${(it.segments || []).length} Abschnitte), Key Moments (${(it.keyMoments || []).length}), Notizen zu Kandidaten (${(it.candidateNotes || []).length}), Zusammenfassung` : "nichts"}</span>
+        <span class="muted">Vom Code berechnet</span><span>Beat-/Taktraster${m.steady ? " aus beat, bar, bars.start" : ""}, Energiesprünge, leise Bereiche, Energiespitzen, Kandidaten-Scores, Prüfung der Claude-Deutung</span>
+      </div>
+      <div class="tablebox"><table><thead><tr><th>Feld</th><th>Quelle</th><th>Wert</th><th>Hinweis</th></tr></thead><tbody>${ftable}</tbody></table></div>
+      <details><summary>Rohdaten von Shotstack (JSON)</summary><pre>${esc(JSON.stringify(raw, null, 1))}</pre></details>
+      ${it ? `<details><summary>Rohantwort von Claude (JSON)</summary><pre>${esc(JSON.stringify(it, null, 1))}</pre></details>` : ""}
+    </section>`;
+  }
+
+  boot();
+})();
+</script>
