@@ -42,11 +42,23 @@ Der Code prüft jede Claude-Deutung gegen die Messwerte:
 - **Stile:** Neutral, Elegant, Dynamic und Cinematic ändern nur die Gewichtung der Teilwerte. Elegant bewertet zusätzlich einen ruhigen Fluss, Cinematic zusätzlich Release/Finale.
 - **Taktraster:** Pro Länge zeigt die Seite, ob sie genau auf einem Takt endet. Bei 120 BPM enden 23, 25 und 27 s immer einen halben Takt daneben.
 
+## Musik hochladen
+
+- **Warum über den Chat:** `analyse_music` braucht eine öffentliche URL. Die Seite selbst kann weder die Shotstack-Ingest-API erreichen, noch sind Dateien in ihrer Ablage öffentlich (geprüft: 403 ohne Anmeldung). Deshalb läuft der Upload in zwei Schritten.
+- **Schritt 1, in der Seite:** MP3, WAV oder M4A (bis 25 MB) per Drag & Drop. Die Seite speichert die Datei in Teilen zu 160 KB in `uploadChunks` und legt einen Eintrag in `uploads` mit Status `pending` an.
+- **Schritt 2, im Chat „sync“ sagen.** Claude führt dann diese Schritte aus:
+  1. die Teile auslesen und mit `tools/assemble_upload.py` zusammensetzen (Prüfung von Teilzahl und Bytegröße)
+  2. die Datei mit `tools/ingest_upload.py` zu Shotstack (stage) hochladen
+  3. den Track in `tracks` eintragen
+  4. den Upload auf `done` setzen und die Teile löschen
+- **Kein automatischer Anstoß:** Die Seite stößt die Übernahme nicht selbst an, sie geschieht nur auf deine Anweisung im Chat.
+
 ## Speicherung (db)
 
 | Collection | Inhalt |
 |---|---|
 | `tracks` | Musik-Assets aus der Shotstack-Ingest-API (stage), per „sync“ im Chat eingetragen, oder per URL hinzugefügt |
+| `uploads`, `uploadChunks` | in der Seite hochgeladene Dateien bis zur Übernahme zu Shotstack |
 | `analyses/{trackId}` | Shotstack-Rohdaten, Job-ID, gelieferte Felder, Claude-Deutung, berechnete Kandidaten, Zeitpunkte |
 
 - **Re-analyze:** führt Shotstack und Claude neu aus.

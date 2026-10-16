@@ -65,6 +65,17 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
 .track .name { font-weight: 600; overflow-wrap: anywhere; }
 .track .facts { font-size: 0.82rem; color: var(--muted); }
 .status { font-size: 0.78rem; white-space: nowrap; }
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; cursor: pointer; display: grid; gap: 4px; }
+.drop.over { border-color: var(--accent); background: var(--soft); }
+.drop strong { font-family: var(--f-display); font-size: 1.05rem; }
+.drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.uploads { display: grid; gap: 6px; }
+.upload { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 12px; border-radius: 10px; background: var(--soft); font-size: 0.88rem; }
+.upload .name { font-weight: 600; overflow-wrap: anywhere; }
+.upload .st { white-space: nowrap; }
+.upload .st.failed { color: var(--bad); } .upload .st.done { color: var(--ok); }
+.bar { grid-column: 1 / -1; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--accent); }
 .urlrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 audio { width: 100%; }
 .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
@@ -133,7 +144,13 @@ details summary { cursor: pointer; font-weight: 600; }
   <div class="notice" id="nocaps" hidden></div>
 
   <section class="panel" aria-labelledby="h-in">
-    <div class="row between"><h2 id="h-in">1 · Music Input</h2><span class="small muted">Tracks aus deinem Shotstack-Upload (stage). Neue Uploads: im Chat „sync“ sagen.</span></div>
+    <div class="row between"><h2 id="h-in">1 · Music Input</h2><span class="small muted">Tracks aus deinem Shotstack-Upload (stage)</span></div>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-describedby="drop-hint">
+      <strong>Musik hochladen</strong>
+      <span class="small muted" id="drop-hint">MP3, WAV oder M4A hierher ziehen oder klicken. Die Seite speichert die Datei. Danach im Chat „sync“ sagen: dann wird sie zu Shotstack (stage) übernommen und erscheint in der Liste.</span>
+      <input type="file" id="file-input" accept="audio/*,.mp3,.wav,.m4a,.aac" hidden>
+    </div>
+    <div class="uploads" id="uploads"></div>
     <div class="tracks" id="tracks"></div>
     <div class="urlrow">
       <input type="text" id="url-input" placeholder="oder öffentliche MP3-/WAV-URL einfügen" aria-label="Öffentliche Musik-URL">
@@ -290,7 +307,10 @@ function checkInterpretation(m, d, it) {
   const LENGTHS = [23, 25, 27, 30];
   const MAP_X0 = 74, MAP_X1 = 984; // map drawing area inside the 1000-wide viewBox, left part holds the row labels
   const STYLES = [["neutral", "Neutral"], ["elegant", "Elegant"], ["dynamic", "Dynamic"], ["cinematic", "Cinematic"]];
-  const S = { db: null, mcp: null, sample: null, tracks: [], analyses: {}, sel: null, style: "neutral", custom: null, busy: false, pick: null, confirmClear: false, stopAt: null };
+  // uploads: the page cannot reach Shotstack's ingest API, so it stores the file in chunks in its database;
+  // saying "sync" in the chat moves it to Shotstack (stage) and lists it as a track
+  const CHUNK = 160 * 1024, MAX_BYTES = 25 * 1048576;
+  const S = { db: null, mcp: null, sample: null, tracks: [], analyses: {}, uploads: [], progress: {}, mine: new Set(), sel: null, style: "neutral", custom: null, busy: false, pick: null, confirmClear: false, stopAt: null };
   try { S.style = localStorage.getItem("musicStyle") || "neutral"; } catch {}
 
   // ---------- boot ----------
@@ -307,6 +327,11 @@ function checkInterpretation(m, d, it) {
     if (S.db) {
       S.db.collection("tracks").onSnapshot(qs => { S.tracks = qs.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.created < b.created ? 1 : -1)); if (!S.sel || !S.tracks.some(t => t.id === S.sel)) { let saved = null; try { saved = localStorage.getItem("musicTrack"); } catch {} S.sel = (S.tracks.find(t => t.id === saved) || S.tracks[0])?.id || null; } render(); });
       S.db.collection("analyses").onSnapshot(qs => { S.analyses = Object.fromEntries(qs.docs.map(d => [d.id, d.data()])); render(); });
+      S.db.collection("uploads").onSnapshot(qs => {
+        S.uploads = qs.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+        for (const u of S.uploads) if (u.status === "done" && u.trackId && S.mine.has(u.id)) { S.mine.delete(u.id); S.sel = u.trackId; S.pick = null; log(`${u.filename} ist bei Shotstack und kann analysiert werden.`, "ok"); }
+        render();
+      });
     }
     render();
   }
@@ -328,6 +353,39 @@ function checkInterpretation(m, d, it) {
     if (e.target.name === "track") { S.sel = e.target.value; S.pick = null; S.confirmClear = false; try { localStorage.setItem("musicTrack", S.sel); } catch {} render(); }
     if (e.target.id === "custom-len") { const v = +e.target.value; S.custom = v >= 10 && v <= 120 ? v : null; render(); }
   });
+
+  const drop = $("drop"), fileIn = $("file-input");
+  drop.addEventListener("click", () => fileIn.click());
+  drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileIn.click(); } });
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); uploadFiles([...e.dataTransfer.files]); });
+  fileIn.addEventListener("change", () => { uploadFiles([...fileIn.files]); fileIn.value = ""; });
+  const b64 = buf => { let s = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+  async function uploadFiles(files) {
+    if (!S.db) { log("Hochladen braucht den Speicher der Seite. Öffne die Seite in claude.ai.", "bad"); return; }
+    for (const f of files) {
+      if (!/^audio\//.test(f.type) && !/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(f.name)) { log(`${f.name}: keine Audiodatei.`, "warn"); continue; }
+      if (f.size > MAX_BYTES) { log(`${f.name}: ${(f.size / 1048576).toFixed(1)} MB, erlaubt sind bis 25 MB.`, "warn"); continue; }
+      const id = "up" + Date.now().toString(36), n = Math.ceil(f.size / CHUNK); S.mine.add(id);
+      const doc = { filename: f.name, size: f.size, type: f.type || "", chunks: n, createdAt: new Date().toISOString(), status: "uploading" };
+      try {
+        await S.db.collection("uploads").doc(id).set(doc);
+        for (let i = 0; i < n; i++) {
+          const data = b64(await f.slice(i * CHUNK, (i + 1) * CHUNK).arrayBuffer());
+          await S.db.collection("uploadChunks").doc(`${id}_${String(i).padStart(3, "0")}`).set({ uploadId: id, i, data });
+          S.progress[id] = (i + 1) / n; renderUploads();
+        }
+        await S.db.collection("uploads").doc(id).set({ ...doc, status: "pending" });
+        log(`${f.name}: gespeichert (${n} Teile). Sag jetzt im Chat „sync“, dann wird die Datei zu Shotstack übernommen.`, "ok");
+      } catch (e) { log(`${f.name}: Speichern fehlgeschlagen (${e?.code || e?.message || e}).`, "bad"); }
+    }
+  }
+  function renderUploads() {
+    const open = S.uploads.filter(u => u.status !== "done" || Date.now() - Date.parse(u.doneAt || u.createdAt) < 10 * 60000);
+    const label = { uploading: "wird gespeichert", pending: "gespeichert · im Chat „sync“ sagen", ingesting: "wird zu Shotstack hochgeladen", done: "bei Shotstack, in der Liste", failed: "fehlgeschlagen" };
+    $("uploads").innerHTML = open.map(u => `<div class="upload"><span class="name">${esc(u.filename)} <span class="muted small">· ${(u.size / 1048576).toFixed(1)} MB</span></span><span class="st ${u.status}">${label[u.status] || esc(u.status)}</span>${u.error ? `<span class="small" style="grid-column:1/-1;color:var(--bad)">${esc(u.error)}</span>` : ""}${u.status === "uploading" ? `<span class="bar"><span style="width:${Math.round((S.progress[u.id] || 0) * 100)}%"></span></span>` : ""}</div>`).join("");
+  }
 
   // ---------- analysis ----------
   async function shotstack(url) {
@@ -417,10 +475,11 @@ Write every free-text value in German. Return JSON only:
     $("btn-reanalyze").disabled = S.busy || !S.mcp || !t || !a?.raw;
     $("btn-clear").disabled = S.busy || !a;
     $("btn-clear").textContent = S.confirmClear ? "Wirklich löschen?" : "Clear analysis";
+    renderUploads();
     $("tracks").innerHTML = S.tracks.length ? S.tracks.map(x => { const an = S.analyses[x.id];
       return `<label class="track"><input type="radio" name="track" value="${esc(x.id)}" ${x.id === S.sel ? "checked" : ""}><span><span class="name">${esc(x.filename)}</span><br><span class="facts">${x.duration ? `${(+x.duration).toFixed(2)} s` : (an?.raw ? `${an.raw.duration.toFixed(2)} s` : "Dauer unbekannt")} · ${esc((x.extension || x.filename.split(".").pop() || "").toUpperCase())}${x.filesize ? ` · ${(x.filesize / 1048576).toFixed(1)} MB` : ""} · ${x.created ? `hochgeladen ${fmtDate(x.created)}` : "Upload-Zeit unbekannt"}${x.source === "url" ? " · per URL" : ""}</span></span>
         <span class="status ${an?.raw ? "" : "muted"}">${an?.raw ? `analysiert ${fmtDate(an.analyzedAt)}` : an?.error ? "Fehler" : "nicht analysiert"}</span></label>`; }).join("")
-      : `<p class="empty">Noch keine Tracks. Lade Musik in Shotstack hoch und sag im Chat „sync“, oder füge unten eine öffentliche URL ein.</p>`;
+      : `<p class="empty">Noch keine Tracks. Lade oben eine Musikdatei hoch oder füge unten eine öffentliche URL ein.</p>`;
     if (t && player.dataset.src !== t.url) { player.src = t.url; player.dataset.src = t.url; }
     $("results").innerHTML = !t ? "" : !a ? `<section class="panel"><div class="empty">Noch keine Analyse für ${esc(t.filename)}. „Analyze Music“ startet die kostenlose Shotstack-Analyse.</div></section>`
       : !a.raw ? `<section class="panel"><p class="notice">Analyse fehlgeschlagen: ${esc(a.error)}</p></section>` : results(t, a);
