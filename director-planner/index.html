@@ -1,0 +1,597 @@
+<title>Director Planer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an editor's cut sheet: inputs on top, then the plan as timeline (picture over music) and shot list, then validation and debug */
+:root {
+  --bg: #eff0ec; --panel: #fbfbf8; --ink: #1b1f1c; --muted: #5f6760; --line: #d6dad2; --soft: #e5e8e1;
+  --accent: #2f6b4f; --accent-ink: #ffffff; --ok: #2b7a4b; --warn: #8f6400; --bad: #b3332a;
+  --cA: #2f6b4f; --cB: #6a9a4d; --cC: #c9a43a; --cD: #d4813a; --cE: #b3332a; --chip-ink: #ffffff; --chip-ink-dark: #1b1f1c;
+  --energy: #6c7f9a; --down: #1b1f1c; --rise: #2b7a4b; --fall: #c0612b; --drop: #b3332a; --moment: #c9a43a; --dissolve: rgba(255, 255, 255, 0.55);
+  --f-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --f-body: "Inter Tight", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #131614; --panel: #1b1f1c; --ink: #e6e9e3; --muted: #9ba49c; --line: #2f3530; --soft: #232823;
+  --accent: #7cc39c; --accent-ink: #131614; --ok: #6fcf97; --warn: #e3b552; --bad: #f08074;
+  --cA: #4d9a72; --cB: #7fae60; --cC: #d8b54a; --cD: #e0924c; --cE: #d0554b;
+  --energy: #8fa3c0; --down: #e6e9e3; --rise: #6fcf97; --fall: #f09a5f; --drop: #f08074; --moment: #e3c060; --dissolve: rgba(0, 0, 0, 0.45); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #131614; --panel: #1b1f1c; --ink: #e6e9e3; --muted: #9ba49c; --line: #2f3530; --soft: #232823;
+  --accent: #7cc39c; --accent-ink: #131614; --ok: #6fcf97; --warn: #e3b552; --bad: #f08074;
+  --cA: #4d9a72; --cB: #7fae60; --cC: #d8b54a; --cD: #e0924c; --cE: #d0554b;
+  --energy: #8fa3c0; --down: #e6e9e3; --rise: #6fcf97; --fall: #f09a5f; --drop: #f08074; --moment: #e3c060; --dissolve: rgba(0, 0, 0, 0.45); color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 18px; }
+.wrap > *, section.panel > * { min-width: 0; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+h1 { font-family: var(--f-display); font-size: 2rem; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-family: var(--f-display); font-size: 1.2rem; font-weight: 600; }
+h3 { font-size: 0.95rem; font-weight: 600; }
+p { margin: 0; }
+.muted { color: var(--muted); } .small { font-size: 0.85rem; }
+.mono { font-family: var(--f-mono); font-size: 0.84em; font-variant-numeric: tabular-nums; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; }
+button, select { font: inherit; }
+button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.danger { color: var(--bad); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+select { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
+header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+header.top .lead { max-width: 66ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.78rem; background: var(--panel); white-space: nowrap; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.chip.on i { background: var(--ok); } .chip.off i { background: var(--bad); }
+section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.row.between { justify-content: space-between; }
+.notice { border-left: 3px solid var(--warn); padding: 8px 12px; background: var(--soft); border-radius: 0 8px 8px 0; font-size: 0.9rem; }
+.status { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; align-content: start; }
+.kv { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); gap: 3px 12px; font-size: 0.88rem; }
+.kv span:nth-child(odd) { color: var(--muted); }
+.styles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 680px) { .styles { grid-template-columns: minmax(0, 1fr); } }
+.style { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer; display: grid; gap: 4px; }
+.style:has(input:checked) { border-color: var(--accent); background: var(--soft); }
+.style b { font-family: var(--f-display); font-size: 1.05rem; }
+.style input { margin-right: 6px; }
+.log { font-family: var(--f-mono); font-size: 0.74rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 140px; overflow: auto; white-space: pre-wrap; }
+.log .ok { color: var(--ok); } .log .warn { color: var(--warn); } .log .bad { color: var(--bad); }
+.cls { display: inline-grid; place-items: center; min-width: 24px; height: 20px; padding: 0 6px; border-radius: 5px 10px 10px 5px; font-weight: 700; font-size: 0.78rem; }
+.cls.A { background: var(--cA); color: var(--chip-ink); } .cls.B { background: var(--cB); color: var(--chip-ink); } .cls.C { background: var(--cC); color: var(--chip-ink-dark); }
+.cls.D { background: var(--cD); color: var(--chip-ink-dark); } .cls.E { background: var(--cE); color: var(--chip-ink); }
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stat { background: var(--bg); border-radius: 10px; padding: 8px 12px; display: grid; gap: 2px; }
+.stat .v { font-family: var(--f-display); font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.concept { font-family: var(--f-display); font-size: 1.15rem; }
+.tlbox { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.tlbox svg { display: block; min-width: 820px; width: 100%; height: auto; }
+svg text { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
+svg .shotlabel { font-family: var(--f-body); font-size: 11px; font-weight: 600; fill: var(--chip-ink); }
+svg .shotsub { font-family: var(--f-mono); font-size: 9.5px; fill: var(--chip-ink); }
+svg .dark { fill: var(--chip-ink-dark); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.78rem; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 10px; margin-right: 5px; vertical-align: -1px; border-radius: 2px; }
+.tablebox { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
+td.mono { white-space: nowrap; }
+td.reason { min-width: 240px; }
+td.clipcell { white-space: nowrap; }
+.issues { margin: 0; padding-left: 18px; display: grid; gap: 2px; font-size: 0.9rem; }
+.issues .e { color: var(--bad); } .issues .w { color: var(--warn); }
+.pill { font-size: 0.75rem; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); white-space: nowrap; }
+.pill.ok { border-color: var(--ok); color: var(--ok); } .pill.bad { border-color: var(--bad); color: var(--bad); }
+.saved { display: grid; gap: 6px; }
+.saved .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.saved .item.cur { border-color: var(--accent); background: var(--soft); }
+.saved .acts { display: flex; gap: 6px; }
+.saved .acts button { padding: 3px 10px; font-size: 0.8rem; }
+pre { margin: 0; font-family: var(--f-mono); font-size: 0.72rem; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; background: var(--bg); padding: 10px; border-radius: 8px; }
+details summary { cursor: pointer; font-weight: 600; }
+.empty { text-align: center; padding: 28px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="lead">
+      <h1>Director Planer</h1>
+      <p class="muted">Fertige Clipanalyse und Musikdaten plus Style ergeben einen individuellen Schnittplan, technisch geprüft. Keine eigene Analyse, kein Edit-JSON, kein Render.</p>
+    </div>
+    <div class="chips" aria-label="Verfügbarkeit"><span class="chip" id="cap-sample"><i></i>Claude</span><span class="chip" id="cap-db"><i></i>Speicher</span></div>
+  </header>
+  <div class="notice" id="nocaps" hidden></div>
+
+  <section class="panel" aria-labelledby="h-data">
+    <div class="row between"><h2 id="h-data">1 · Data Status</h2><span class="small muted">Neue Analyse-Ergebnisse übernehmen: im Chat „sync director“ sagen</span></div>
+    <div class="status">
+      <div class="box"><div class="row between"><span class="label">Clip-Set (Clip-Gewichtung)</span><select id="sel-set" aria-label="Clip-Set"></select></div><div class="kv" id="set-info"></div></div>
+      <div class="box"><div class="row between"><span class="label">Track (Musik-Struktur)</span><select id="sel-track" aria-label="Track"></select></div><div class="kv" id="track-info"></div></div>
+      <div class="box"><div class="row between"><span class="label">Musikabschnitt</span><select id="sel-window" aria-label="Musikabschnitt"></select></div><div class="kv" id="window-info"></div></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-style">
+    <h2 id="h-style">2 · Style</h2>
+    <div class="styles" id="styles"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-gen">
+    <div class="row between">
+      <h2 id="h-gen">3 · Generate Plan</h2>
+      <div class="row"><button class="primary" id="btn-gen">Generate Plan</button><button id="btn-regen">Regenerate Plan</button><button id="btn-save">Save Plan</button></div>
+    </div>
+    <div class="log" id="log" aria-live="polite">Bereit.</div>
+    <div class="saved" id="saved"></div>
+  </section>
+
+  <div id="plan"></div>
+</div>
+
+<script>
+// ===== VALIDATION-BEGIN: copied unchanged from director/index.html (CORE block): timing utilities + validatePlan =====
+const FPS = 24;
+const snap = t => Math.round(t * FPS) / FPS;
+const r4 = x => Math.round(x * 10000) / 10000;
+const tc = t => { const s = Math.max(0, t), m = Math.floor(s / 60), sec = Math.floor(s % 60), fr = Math.round((s - Math.floor(s)) * FPS) % FPS;
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}:${String(fr).padStart(2, "0")}`; };
+
+// CSS easing curves as used by Shotstack Studio's CurveInterpolator
+const CURVES = { easeIn: [0.42, 0, 1, 1], easeOut: [0, 0, 0.58, 1], easeInOut: [0.42, 0, 0.58, 1] };
+function ease(name, x) {
+  const c = CURVES[name]; if (!c) return x;
+  const [x1, y1, x2, y2] = c; let lo = 0, hi = 1, t = 0.5;
+  for (let i = 0; i < 40; i++) { t = (lo + hi) / 2; const bx = 3 * (1 - t) ** 2 * t * x1 + 3 * (1 - t) * t * t * x2 + t ** 3; if (bx < x) lo = t; else hi = t; }
+  return 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t * t * y2 + t ** 3;
+}
+// speed spec: number, or [{from,to,at,over,easing}] (ramps, seconds into the shot)
+function rampsOf(spec) { return Array.isArray(spec) ? [...spec].sort((a, b) => a.at - b.at) : null; }
+function speedAt(spec, t) {
+  const rs = rampsOf(spec); if (!rs) return spec ?? 1;
+  let cur = rs[0].from;
+  for (const k of rs) { if (t < k.at) return cur; if (t <= k.at + k.over) return k.from + (k.to - k.from) * ease(k.easing, (t - k.at) / k.over); cur = k.to; }
+  return cur;
+}
+function srcUsed(spec, L, step = 0.001) {
+  if (!Array.isArray(spec)) return (spec ?? 1) * L;
+  let u = 0; const n = Math.max(1, Math.round(L / step)); const d = L / n;
+  for (let i = 0; i < n; i++) u += speedAt(spec, (i + 0.5) * d) * d;
+  return u;
+}
+function speedLabel(spec) {
+  const rs = rampsOf(spec); if (!rs) return `${(+spec || 1).toFixed(2)}×`;
+  return rs.map(k => `${k.from}→${k.to}× @${(+k.at).toFixed(2)}s/${(+k.over).toFixed(2)}s ${k.easing || "linear"}`).join(" · ");
+}
+
+const nearest = (arr, x) => arr.reduce((best, v) => Math.abs(v - x) < Math.abs(best - x) ? v : best, arr[0] ?? x);
+
+// Validate a director plan against hard technical constraints; returns normalized shots + issues
+function validatePlan(plan, ctx) {
+  const errors = [], warnings = [], info = [];
+  const shots = (plan.shots || []).map((s, i) => ({ ...s, n: i + 1 }));
+  if (!shots.length) errors.push("Der Plan enthält keine Shots.");
+  // timeline contiguity (frame-snapped)
+  let t = 0;
+  for (const s of shots) {
+    let st = snap(+s.start), en = snap(+s.end);
+    if (Math.abs(st - t) <= 0.1) st = snap(t); else errors.push(`Shot ${s.n}: beginnt bei ${(+s.start).toFixed(3)}s, erwartet ${t.toFixed(3)}s (Lücke oder Überlappung).`);
+    if (!(en > st)) errors.push(`Shot ${s.n}: Ende liegt nicht nach dem Anfang.`);
+    s.start = st; s.end = en; s.length = r4(en - st); t = en;
+    if (s.length < 0.25) errors.push(`Shot ${s.n}: ${s.length.toFixed(2)}s ist kürzer als 0,25s.`);
+    else if (s.length < 0.45) warnings.push(`Shot ${s.n}: sehr kurz (${s.length.toFixed(2)}s).`);
+  }
+  const total = t;
+  if (total < 22.5 || total > 45) errors.push(`Gesamtlänge ${total.toFixed(2)}s liegt außerhalb von 23–45s.`);
+  if (ctx.targetLength && Math.abs(total - ctx.targetLength) > 0.3) errors.push(`Gesamtlänge ${total.toFixed(2)}s, der gewählte Musikabschnitt dauert ${ctx.targetLength.toFixed(2)}s. Das letzte Shot-Ende muss dort liegen.`);
+  if (total > 33 && !String(ctx.lengthReason || plan.lengthReason || "").trim()) warnings.push(`${total.toFixed(1)}s ist länger als der typische Bereich 23–32s, ohne Begründung.`);
+  if (ctx.strongSeconds && total > ctx.strongSeconds + 2) warnings.push(`Das starke Material trägt etwa ${ctx.strongSeconds}s, der Edit dauert ${total.toFixed(1)}s. Lieber kürzer als gestreckt.`);
+  // per shot: clip, speeds, source budget, hard cuts, reuse
+  const ranges = {};
+  for (const s of shots) {
+    const c = ctx.clips[s.clip];
+    if (!c) { errors.push(`Shot ${s.n}: unbekannter oder nicht ausgewählter Clip "${s.clip}".`); continue; }
+    s.filename = c.filename;
+    // the director picks the visible source range first; constant speed may follow from it ("auto")
+    const want = s.sourceEnd != null && s.sourceEnd !== "" ? +s.sourceEnd : null;
+    if ((s.speed == null || s.speed === "auto") && want != null) s.speed = Math.round((want - +s.sourceIn) / s.length * 100) / 100;
+    if (s.speed == null || s.speed === "auto") s.speed = 1;
+    const rs = rampsOf(s.speed);
+    const vals = rs ? rs.flatMap(k => [+k.from, +k.to]) : [+(s.speed ?? 1)];
+    if (vals.some(v => !(v >= 0.25 && v <= 3))) errors.push(`Shot ${s.n}: Speed außerhalb 0,25–3×.`);
+    else if (vals.some(v => v < 0.5 || v > 2)) warnings.push(`Shot ${s.n}: Speed unter 0,5× oder über 2× (Ruckel- oder Sprunggefahr).`);
+    if (rs) { let prev = 0; for (const k of rs) {
+      if (!(k.over > 0) || k.at < prev - 1e-3 || k.at + k.over > s.length + 1e-3) errors.push(`Shot ${s.n}: Ramp ${k.from}→${k.to} liegt nicht vollständig im Shot (0–${s.length.toFixed(2)}s).`);
+      if (k.easing && !["easeIn", "easeOut", "easeInOut", "linear"].includes(k.easing)) errors.push(`Shot ${s.n}: unbekanntes Easing "${k.easing}".`);
+      prev = k.at + k.over; } }
+    const tin = s.transitionIn || "cut";
+    if (!["cut", "dissolve", "fadeIn"].includes(tin)) errors.push(`Shot ${s.n}: unbekannte Transition "${tin}".`);
+    if (tin === "fadeIn" && s.n !== 1) errors.push(`Shot ${s.n}: fadeIn nur beim ersten Shot.`);
+    if (tin === "dissolve" && s.n === 1) errors.push("Shot 1: dissolve braucht einen vorherigen Shot.");
+    const d = tin === "cut" ? 0 : +(s.transitionDuration ?? (tin === "dissolve" ? 0.5 : 0.8));
+    if (tin !== "cut" && !(d >= 0.2 && d <= 2)) errors.push(`Shot ${s.n}: Transition-Dauer ${d}s außerhalb 0,2–2s.`);
+    if (tin === "dissolve" && d > s.length) errors.push(`Shot ${s.n}: Dissolve länger als der Shot.`);
+    s.transitionIn = tin; s.transitionDuration = d;
+    s.sourceIn = r4(+s.sourceIn);
+    const lead = tin === "dissolve" ? d * speedAt(s.speed, 0) : 0;
+    const used = srcUsed(s.speed, s.length);
+    s.sourceOut = r4(s.sourceIn + used);
+    if (want != null && Math.abs(want - s.sourceOut) > 0.08) warnings.push(`Shot ${s.n}: geplantes Source-Ende ${want.toFixed(2)}s, mit Speed ${speedLabel(s.speed)} tatsächlich ${s.sourceOut.toFixed(2)}s.`);
+    const a = s.sourceIn - lead, b = s.sourceOut;
+    if (a < -1e-3) errors.push(`Shot ${s.n}: Source In ${s.sourceIn.toFixed(2)}s zu früh (Dissolve braucht ${lead.toFixed(2)}s Vorlauf).`);
+    if (b > c.duration - 0.01) errors.push(`Shot ${s.n}: braucht Footage bis ${b.toFixed(2)}s, ${c.filename} ist nur ${c.duration.toFixed(2)}s lang (${(b - c.duration).toFixed(2)}s zu viel).`);
+    for (const cut of c.cuts || []) if (a < cut + 0.06 && b > cut - 0.06) errors.push(`Shot ${s.n}: läuft über den harten Schnitt in ${c.filename} bei ${cut.toFixed(2)}s.`);
+    if (c.usable && (a < c.usable[0] - 0.1 || b > c.usable[1] + 0.1)) errors.push(`Shot ${s.n}: zeigt ${Math.max(0, a).toFixed(2)}–${b.toFixed(2)}s von ${c.filename}, nutzbar laut Bildanalyse nur ${c.usable[0].toFixed(2)}–${c.usable[1].toFixed(2)}s${c.weakEnd && b > c.usable[1] + 0.1 ? ` (Ende: ${c.weakEnd})` : c.weakStart && a < c.usable[0] - 0.1 ? ` (Anfang: ${c.weakStart})` : ""}.`);
+    for (const av of c.avoid || []) if (a < av.to && b > av.from) warnings.push(`Shot ${s.n}: nutzt ${av.from.toFixed(1)}–${av.to.toFixed(1)}s von ${c.filename}, laut Analyse problematisch (${av.why}).`);
+    (ranges[s.clip] ||= []).push([a, b, s.n, s.length, s.role, s.reuseReason]);
+    if (s.n === shots.length && s.transitionOut === "fadeOut") s.fadeOut = +(s.transitionOutDuration ?? 1);
+  }
+  const rangesOf = id => (ranges[id] || []).slice().sort((x, y) => x[2] - y[2]);
+  for (const [clip, rr] of Object.entries(ranges)) {
+    rr.sort((x, y) => x[0] - y[0]);
+    for (let i = 1; i < rr.length; i++) if (rr[i][0] < rr[i - 1][1] - 0.05) errors.push(`Shots ${rr[i - 1][2]} und ${rr[i][2]}: überlappende Quellbereiche in ${ctx.clips[clip]?.filename || clip} (dieselben Bilder doppelt).`);
+    const fn = ctx.clips[clip]?.filename || clip, byTime = [...rr].sort((x, y) => x[2] - y[2]);
+    if (rr.length > 2 && byTime.slice(2).some(u => !String(u[5] || "").trim())) errors.push(`${fn} kommt ${rr.length}× vor. Mehr als 2 Verwendungen nur mit reuseReason (begründete Ausnahme).`);
+    if (rr.length >= 2) { const [x, y] = byTime;
+      if (x[3] >= 1.8 && y[3] >= 1.8 && Math.abs(x[3] - y[3]) < 0.6) warnings.push(`${fn}: Shots ${x[2]} und ${y[2]} sind zwei fast gleich lange, lange Verwendungen. Besser einmal kurzer Insert, einmal länger.`);
+      if (String(x[4] || "").toLowerCase() === String(y[4] || "").toLowerCase()) warnings.push(`${fn}: Shots ${x[2]} und ${y[2]} haben dieselbe Rolle (${x[4]}). Eine zweite Verwendung sollte eine andere Funktion haben.`); }
+  }
+  // screen time follows relevance: weak/secondary rooms stay short, main spaces carry the film
+  const screen = {}; for (const s of shots) if (ctx.clips[s.clip]) screen[s.clip] = r4((screen[s.clip] || 0) + s.length);
+  let lowT = 0, highT = 0, haveHigh = false;
+  for (const [id, sec] of Object.entries(screen)) {
+    const c = ctx.clips[id], w = c.weight; if (!w) continue;
+    if (w.lowRelevance) lowT += sec; if (w.propertyImportance >= 8) highT += sec;
+    if (w.maxT != null && sec > w.maxT + (w.lowRelevance ? 0.3 : 1.0)) (w.lowRelevance ? errors : warnings).push(`${c.filename} (${c.room || "?"}, Relevanz ${w.propertyImportance}/10) ist ${sec.toFixed(2)}s zu sehen, empfohlen höchstens ${w.maxT}s.`);
+    if (w.lowRelevance && rangesOf(id).length > 1 && !rangesOf(id).slice(1).every(u => String(u[5] || "").trim())) warnings.push(`${c.filename} ist ein Nebenraum und kommt mehrfach vor. Wiederholung nur mit reuseReason, nicht für Länge.`);
+  }
+  for (const c of Object.values(ctx.clips)) if (c.weight && c.weight.propertyImportance >= 8 && c.usable) haveHigh = true;
+  if (total > 0 && lowT / total > 0.3) errors.push(`Nebenräume und wenig relevante Szenen füllen ${(lowT / total * 100).toFixed(0)}% der Laufzeit (${lowT.toFixed(1)}s), erlaubt sind höchstens 30%.`);
+  else if (total > 0 && lowT / total > 0.2) warnings.push(`Nebenräume füllen ${(lowT / total * 100).toFixed(0)}% der Laufzeit. Hauptbereiche sollten klar dominieren.`);
+  if (haveHigh && total > 0 && highT / total < 0.5) warnings.push(`Hauptbereiche (Relevanz ≥ 8) haben nur ${(highT / total * 100).toFixed(0)}% der Laufzeit.`);
+  // dramaturgy hint: secondary rooms rarely open a property film (not a hard rule)
+  const first = shots[0] && ctx.clips[shots[0].clip];
+  if (first && (first.category === "secondary" || first.weight?.secondary)) warnings.push(`Shot 1 eröffnet mit ${first.filename} (${first.room || "Nebenraum"}). Nebenräume sind normalerweise kein Opening.`);
+  // music: ONE continuous excerpt from music.start, exactly as long as the timeline (no internal cuts, no loops)
+  const m = plan.music || {};
+  if (Array.isArray(m.segments) && m.segments.length > 1) errors.push("Musik darf nicht geschnitten werden: genau ein durchgehender Ausschnitt (music.start).");
+  let mStart = m.start ?? m.segments?.[0]?.trackStart;
+  if (mStart == null || !isFinite(+mStart)) { errors.push("Kein Musik-Startpunkt (music.start) angegeben."); mStart = 0; }
+  mStart = +mStart;
+  const downs = ctx.music.bars.map(b => b.t), nb = nearest(downs, mStart);
+  if (Math.abs(nb - mStart) <= 0.09) mStart = nb; else warnings.push(`Musik-Start ${mStart.toFixed(2)}s liegt nicht auf einem Taktanfang (nächster: ${nb.toFixed(2)}s).`);
+  const mEnd = r4(mStart + total);
+  if (mStart < 0 || mEnd > ctx.music.duration + 0.01) errors.push(`Musik ${mStart.toFixed(2)}–${mEnd.toFixed(2)}s passt nicht in den Track (${ctx.music.duration.toFixed(2)}s). Früher starten oder kürzer schneiden.`);
+  const segs = [{ trackStart: r4(mStart), trackEnd: mEnd }];
+  // style-aware transition checks (soft: the director decides shot by shot)
+  const dis = shots.filter(s => s.transitionIn === "dissolve"), cutsN = Math.max(1, shots.length - 1), style = ctx.style || "";
+  const share = { DYNAMIC: 0.12, CINEMATIC: 0.25, ELEGANT: 0.4 }[style];
+  if (share != null && dis.length > Math.max(1, Math.round(share * cutsN))) warnings.push(`${dis.length} von ${cutsN} Schnitten sind Dissolves. Für ${style} zu viele weiche Übergänge, Hard Cuts bevorzugen.`);
+  const accents = [...ctx.music.drops.map(d => d.time), ...ctx.music.sections.filter(x => x.change === "rise").map(x => x.time)].filter(x => x != null);
+  for (const s of dis) {
+    const prev = shots[s.n - 2], next = shots[s.n];
+    if ((prev && prev.length < 1.0) || s.length < 1.0 || (next && next.length < 1.0 && s.length < 1.4)) warnings.push(`Shot ${s.n}: Dissolve mitten in einer schnellen Montage. Dort wirkt ein Hard Cut sauberer.`);
+    const tt = mStart + s.start; if (accents.some(x => Math.abs(x - tt) < 0.2)) warnings.push(`Shot ${s.n}: Dissolve genau auf einem Drop oder Anstieg der Musik (${tt.toFixed(2)}s im Track). Dort trifft ein Hard Cut härter.`);
+    if (!String(s.transitionReason || "").trim()) warnings.push(`Shot ${s.n}: Dissolve ohne transitionReason.`);
+  }
+  // info: how many cuts land on the music grid
+  const toTrack = x => mStart + x;
+  const cutsAt = shots.slice(1).map(s => s.start);
+  const onGrid = cutsAt.filter(x => { const tt = toTrack(x); return tt != null && Math.abs(nearest(ctx.music.cutPoints, tt) - tt) <= 0.07; }).length;
+  if (cutsAt.length) info.push(`${onGrid} von ${cutsAt.length} Schnitten liegen auf Takt oder halbem Takt.`);
+  return { errors, warnings, info, shots, total: r4(total), screen: { perClip: screen, lowRelevanceSeconds: r4(lowT), mainSeconds: r4(highT) }, music: { start: r4(mStart), end: mEnd, segments: segs, reason: m.startReason || "", fadeIn: +(m.fadeIn ?? 0.3), fadeOut: +(m.fadeOut ?? 1.0) } };
+}
+// ===== VALIDATION-END =====
+
+// ===== MUSIC-MODEL-BEGIN: copied unchanged from music-analyzer/index.html (CORE block): correct bar grid for both Shotstack shapes =====
+const r3 = x => Math.round(x * 1000) / 1000;
+const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
+const quant = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * (s.length - 1)))]; };
+const nearestDist = (arr, x) => arr.reduce((m, v) => Math.min(m, Math.abs(v - x)), Infinity);
+
+// Normalise both Shotstack shapes (steady grid / beat lists) into one model; record where every value comes from
+function modelOf(raw) {
+  const prov = {}, has = k => raw[k] !== undefined && raw[k] !== null;
+  const duration = +raw.duration;
+  const energy = raw.bars?.energy || [];
+  let barStarts = [], beats = [], downbeats = [];
+  if (raw.steady && has("bar") && has("beat")) {
+    // bar n starts at bars.start + n × bar: this matches the bar/time pairs Shotstack returns in sections and drops
+    const b0 = raw.bars?.start ?? raw.origin ?? 0;
+    for (let i = 0; i < (raw.bars?.count ?? energy.length); i++) barStarts.push(r3(b0 + i * raw.bar));
+    for (let t = raw.origin ?? b0; t < duration - 1e-3; t += raw.beat) beats.push(r3(t));
+    downbeats = barStarts.slice();
+    prov.beats = "grid"; prov.downbeats = "grid";
+  } else {
+    beats = (raw.beats || []).map(Number); downbeats = (raw.downbeats || []).map(Number).filter((t, i, a) => i === 0 || t - a[i - 1] > 0.3);
+    const b0 = raw.bars?.start ?? downbeats[0] ?? 0;
+    barStarts = downbeats.filter(t => t >= b0 - 0.05).slice(0, raw.bars?.count ?? energy.length);
+    prov.beats = raw.beats ? "shot" : "na"; prov.downbeats = raw.downbeats ? "shot" : "na";
+  }
+  const bars = barStarts.map((t, i) => ({ i, t, end: r3(barStarts[i + 1] ?? Math.min(duration, t + (raw.bar || (barStarts[1] - barStarts[0]) || 2))), e: energy[i] ?? null }));
+  const barLen = raw.bar || quant(bars.slice(1).map((b, i) => b.t - bars[i].t), 0.5) || 2;
+  return { duration, bpm: raw.bpm ?? null, steady: !!raw.steady, meter: raw.meter ?? null, barLen: r3(barLen), beatLen: raw.beat ?? (raw.bpm ? r3(60 / raw.bpm) : null),
+    origin: raw.origin ?? null, barsStart: raw.bars?.start ?? null, bars, beats, downbeats, sections: raw.sections || [], drops: raw.drops || [], precision: raw.precision || null, downbeat: raw.downbeat || null, prov };
+}
+// ===== MUSIC-MODEL-END =====
+
+// ===== ADAPTERS: synced analysis data -> the context validatePlan expects (no analysis, no re-weighting) =====
+const RULES_VERSION = "planner-rules/1 · 2026-10-17";
+const SECONDARY_ROOMS = new Set(["bathroom", "wc", "hallway", "gym", "dressing room", "storage", "technical", "detail", "other"]);
+function musicCtx(m) {
+  const cut = [...new Set(m.bars.flatMap(b => [b.t, r4((b.t + b.end) / 2)]))].sort((a, b) => a - b);
+  return { duration: m.duration, barLen: m.barLen, bars: m.bars.map(b => ({ i: b.i, t: b.t, end: b.end, energy: b.e })), sections: m.sections, drops: m.drops, cutPoints: cut };
+}
+function clipCtx(c) {
+  const room = String(c.roomType || "").toLowerCase(), cls = c.priorityClass || "C";
+  const secondary = SECONDARY_ROOMS.has(room);
+  const us = isFinite(+c.usableStart) && isFinite(+c.usableEnd) && +c.usableEnd - +c.usableStart >= 0.3 ? [r4(Math.max(0, +c.usableStart)), r4(Math.min(+c.duration, +c.usableEnd))] : null;
+  const avoid = (c.issues || []).filter(x => x && (x.severity === "moderate" || x.severity === "severe") && +x.to > +x.from).map(x => ({ from: +x.from, to: +x.to, why: `${x.type}: ${x.note || ""}`.slice(0, 120) }));
+  return { filename: c.filename, url: null, duration: +c.duration, cuts: c.hardCuts || [], avoid, usable: us,
+    weakStart: c.weakStart?.reason || "", weakEnd: c.weakEnd?.reason || "", room: c.roomType || "", category: secondary ? "secondary" : "primary",
+    weight: { propertyImportance: +c.propertyImportance || 5, viewerInterest: +c.viewerInterest || 5, visualStrength: +c.visualStrength || 5, secondary, hero: c.heroPotential === "high",
+      relevance: +c.finalScore || +c.contentWeight || 5, lowRelevance: secondary || ["C", "D", "E"].includes(cls),
+      maxT: isFinite(+c.recommendedMaxScreenTime) ? +c.recommendedMaxScreenTime : null, minT: isFinite(+c.recommendedMinScreenTime) ? +c.recommendedMinScreenTime : null, preferredRole: c.preferredRole || "" } };
+}
+// seconds the material carries well, from the synced final screen-time ranges (A/B up to max, C/D only as short inserts, E none)
+function strongSecondsOf(clips) {
+  return r4(clips.reduce((s, c) => s + ({ A: 1, B: 1, C: 0.5, D: 0.35, E: 0 }[c.priorityClass] ?? 0.5) * (+c.recommendedMaxScreenTime || 0), 0));
+}
+</script>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const fx = (x, d = 2) => (x == null || !isFinite(+x)) ? "–" : (+x).toFixed(d);
+  const fmtDate = iso => { try { return new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); } catch { return iso || "–"; } };
+  const log = (msg, cls) => { const el = $("log"); if (el.textContent === "Bereit.") el.textContent = ""; const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = `${new Date().toLocaleTimeString("de-DE")}  ${msg}`; el.appendChild(d); el.scrollTop = el.scrollHeight; };
+  const ROOM_DE = { exterior: "Außenansicht", building: "Gebäude", "living room": "Wohnzimmer", "living/dining": "Wohn-/Essbereich", kitchen: "Küche", dining: "Essbereich", bedroom: "Schlafzimmer", bathroom: "Badezimmer", wc: "WC", terrace: "Terrasse", balcony: "Balkon", garden: "Garten", pool: "Pool", view: "Aussicht", hallway: "Flur", gym: "Gym", "dressing room": "Ankleide", storage: "Abstellraum", detail: "Detail", other: "Sonstiges" };
+  const de = r => ROOM_DE[String(r || "").toLowerCase()] || r || "–";
+  const STYLES = {
+    ELEGANT: { label: "Elegant", short: "ruhig, hochwertig, kontrolliert", text: `ELEGANT: calm, high-end, controlled. Longer hero shots, fewer hectic cuts, let the architecture breathe. Subtle soft transitions where they truly help (short dissolves of about 0.3-0.6 s), but not between every clip; hard cuts remain normal and welcome.` },
+    DYNAMIC: { label: "Dynamic", short: "energiegeladen, Beat-Cuts, Bursts", text: `DYNAMIC: energetic, modern social-media pace. Stronger beat cuts, short montage bursts, mostly hard cuts, clearly varied shot lengths, occasional speed ramps, strong tempo changes. Soft transitions only rarely and never inside fast bursts.` },
+    CINEMATIC: { label: "Cinematic", short: "Spannungsbogen, Builds, große Heros", text: `CINEMATIC: a stronger tension arc with builds, peaks and releases. Big hero shots on important musical moments, controlled alternation between calm and intense. Hard cuts on strong accents; filmic transitions only selectively.` }
+  };
+  const S = { db: null, sample: null, sets: [], tracks: [], plans: [], setId: null, trackId: null, win: "auto", style: "ELEGANT", draft: null, busy: false, confirmDel: null };
+  try { S.style = localStorage.getItem("plannerStyle") || "ELEGANT"; S.win = localStorage.getItem("plannerWin") || "auto"; } catch {}
+
+  // ---------- boot & data ----------
+  function setCap(id, ok, label) { const el = $(id); el.className = "chip " + (ok ? "on" : "off"); el.lastChild.textContent = label; }
+  async function boot() {
+    const use = n => (window.claude?.use ? window.claude.use(n).catch(() => null) : Promise.resolve(null));
+    [S.db, S.sample] = await Promise.all([use("db"), use("sample")]);
+    setCap("cap-sample", !!S.sample, S.sample ? "Claude" : "Claude fehlt"); setCap("cap-db", !!S.db, S.db ? "Speicher" : "Speicher fehlt");
+    if (!S.db || !S.sample) { $("nocaps").hidden = false; $("nocaps").textContent = "Diese Seite braucht den Speicher (synchronisierte Analysen) und Claude (Planung). Öffne sie in claude.ai."; }
+    if (S.db) {
+      const sub = (col, key, sort) => S.db.collection(col).onSnapshot(qs => { S[key] = qs.docs.map(d => ({ id: d.id, ...d.data() })).sort(sort); pickDefaults(); render(); });
+      sub("clipSets", "sets", (a, b) => (a.syncedAt < b.syncedAt ? 1 : -1));
+      sub("tracks", "tracks", (a, b) => (a.syncedAt < b.syncedAt ? 1 : -1));
+      sub("plans", "plans", (a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    }
+    render();
+  }
+  function pickDefaults() {
+    let ps = null, pt = null; try { ps = localStorage.getItem("plannerSet"); pt = localStorage.getItem("plannerTrack"); } catch {}
+    if (!S.sets.some(s => s.id === S.setId)) S.setId = (S.sets.find(s => s.id === ps) || S.sets[0])?.id || null;
+    if (!S.tracks.some(t => t.id === S.trackId)) S.trackId = (S.tracks.find(t => t.id === pt) || S.tracks[0])?.id || null;
+  }
+  const curSet = () => S.sets.find(s => s.id === S.setId) || null;
+  const curTrack = () => S.tracks.find(t => t.id === S.trackId) || null;
+  const keyed = set => set.clips.map((c, i) => ({ ...c, k: "K" + (i + 1) }));
+  // candidates of the chosen style from the Musik-Struktur module (computed there, not here)
+  function windowsOf(t, style) {
+    const st = style.toLowerCase(), out = [];
+    for (const [L, list] of Object.entries(t?.candidates?.[st] || {})) (list || []).forEach((c, i) => out.push({ id: `${L}s-${"ABC"[i]}`, ...c, length: +c.length }));
+    return out.sort((a, b) => a.length - b.length || b.score - a.score);
+  }
+  function chosenWindow(t) { const ws = windowsOf(t, S.style); return S.win === "auto" ? null : ws.find(w => w.id === S.win) || null; }
+
+  // ---------- prompt ----------
+  function clipBrief(c) {
+    return { key: c.k, file: c.filename, rank: c.rank, duration: c.duration, sceneType: c.sceneType, roomType: c.roomType, description: c.shortDescription,
+      propertyImportance: c.propertyImportance, viewerInterest: c.viewerInterest, visualStrength: c.visualStrength,
+      final: { contentWeight: c.contentWeight, editingPriority: c.editingPriority, screenTimePriority: c.screenTimePriority, priorityClass: c.priorityClass, finalScore: c.finalScore, screenTime: [c.recommendedMinScreenTime, c.recommendedMaxScreenTime] },
+      heroPotential: c.heroPotential, roles: c.recommendedRoles, preferredRole: c.preferredRole,
+      usable: [c.usableStart, c.usableEnd], strongest: [c.strongestStart, c.strongestEnd], weakStart: c.weakStart, weakEnd: c.weakEnd,
+      playback: c.recommendedPlayback, playbackReason: c.playbackReason, camera: c.cameraMovement, movementGoodFrom: c.movementGoodFrom, perspectiveWorseFrom: c.perspectiveWorseFrom,
+      problems: (c.issues || []).map(x => `${x.type} ${x.severity} ${x.from}-${x.to}s: ${x.note}`), timeline: (c.segments || []).map(s => `${s.from}-${s.to}s ${s.label}: ${s.note}`),
+      hardCuts: c.hardCuts, bestUse: c.bestUseSummary, relative: c.relativeReason, uniqueness: c.uniqueness, similarTo: c.similarTo };
+  }
+  function windowBrief(m, w) {
+    const inW = t => t >= w.start - 1e-3 && t < w.end - 1e-3, rel = t => r4(t - w.start);
+    return { id: w.id, trackStart: w.start, trackEnd: w.end, length: w.length, score: w.score, sub: w.sub,
+      barsInFilmTime: m.bars.filter(b => inW(b.t)).map(b => [rel(b.t), b.e]), sections: m.sections.filter(s => inW(s.time)).map(s => ({ at: rel(s.time), change: s.change })),
+      drops: m.drops.filter(d => inW(d.time)).map(d => ({ at: rel(d.time) })) };
+  }
+  function prompt(set, t, m, style, wins, fixed) {
+    const clips = keyed(set), it = t.interpretation || {}, kmIn = w => (it.keyMoments || []).filter(k => k.time >= w.start && k.time < w.end).map(k => ({ at: r4(k.time - w.start), type: k.type, note: k.note }));
+    const W = fixed ? [fixed] : wins;
+    return `You are the director and editor of a premium real-estate film. Plan ONE complete edit from finished analysis data. You do not analyse video or music yourself: the values below are the source of truth. Do not re-interpret clip weights unless something is clearly impossible.
+
+STYLE (a creative direction, not a template): ${STYLES[style].text}
+
+PRIORITIES when decisions compete: 1. strong main areas of the property, 2. high-quality clip ranges, 3. viewer interest, 4. music structure, 5. style, 6. completeness. Do not treat all clips equally. Main areas (exterior, building, living room, living/dining, kitchen, terrace, balcony, view, garden, pool, large open spaces) carry the film. Secondary areas (bathroom, WC, gym, dressing room, hallway, side rooms) appear briefly or not at all, even when they look technically good. The final weights below already encode this; follow them.
+
+CLIPS (from the clip analysis; "final" = weights after comparing all clips of this property; usable/strongest in source seconds; screenTime = recommended [min, max] seconds in total for the film):
+${JSON.stringify(clips.map(clipBrief))}
+Property overview (clip analysis): ${set.overview || "–"} Selling points: ${JSON.stringify(set.sellingPoints || [])}
+
+MUSIC "${t.filename}" (Shotstack measurements, ${m.steady ? "steady tempo" : "variable tempo"}, ${m.bpm ?? "?"} bpm, bar ${m.barLen} s). The music always plays as ONE continuous excerpt: no internal cuts, no jumps, no loops.
+${fixed ? "The excerpt is fixed:" : "Choose exactly ONE of these continuous excerpts (computed by the music module from the measurements; choose by what fits this material and this style, not by score alone). The film length equals the chosen excerpt's length:"}
+${JSON.stringify(W.map(w => ({ ...windowBrief(m, w), musicNotes: kmIn(w) })))}
+Music structure of the whole song (interpretation of the measurements by the music module): ${JSON.stringify((it.segments || []).map(s => [s.from, s.to, s.label, s.title]))}
+All times inside an excerpt are FILM time (seconds from the first frame). Use bar starts and half-bars as cut points. Not every beat needs a cut: use musical phrases. A longer hero shot can carry a calm passage; several short shots fit a dense rhythmic passage; put strong A clips (exterior, living, terrace, pool...) on peaks and strong accents.
+
+LENGTH: the film is exactly as long as the chosen excerpt. If the material is thin, prefer a short excerpt (about 23-25 s) over stretching weak material; longer excerpts only when there is enough strong material.
+
+SOURCE RANGES: stay inside each clip's usable range; prefer the strongest range for hero moments; never force weak or problematic ranges; leave a clip early when it gets weak. Give sourceIn and sourceEnd for every shot.
+SPEED: "auto" (constant speed = (sourceEnd - sourceIn) / shot length), a number, or ramps [{"from":x,"to":y,"at":seconds into the shot,"over":seconds,"easing":"easeIn"|"easeOut"|"easeInOut"|"linear"}]. Respect each clip's playback recommendation: slight slowdown 0.8-0.95, slight speedup 1.05-1.25, "avoid speed change" means 1.0. Never speed up a weak range just to use the whole clip. Ramps only where the music builds, the movement is stable, the usable range has enough footage and no AI artifact gets worse.
+REPETITION: a clip normally appears at most twice, then with a different source range and a different function (e.g. a short insert early, a longer hero later), with "reuseReason". Never repeat to fill length.
+TRANSITIONS: hard cuts are the default. transitionIn "dissolve" (0.3-1.0 s, give "transitionReason") only where it truly improves the cut; never inside fast bursts; never on a drop or a strong rise. "fadeIn" only on the first shot, "fadeOut" (transitionOut) only on the last.
+ROLES: opening, establishing, hero, secondary, insert, burst, breath, finale.
+
+TECHNICAL RULES (a validator checks them): 24 fps; shots are contiguous from 0 to exactly the excerpt length; footage used = speed integrated over the shot length and must stay inside the usable range (a dissolve needs lead-in footage before sourceIn) and must not cross a hard cut.
+
+Write every free-text value in German. Return JSON only:
+{"concept": string (one sentence: what this property sells through), "dramaturgy": string (3-5 sentences: the arc over the music), "music": {"excerptId": string, "reason": string, "fadeIn": number, "fadeOut": number}, "lengthReason": string,
+ "shots": [{"clip": key, "sourceIn": number, "sourceEnd": number, "start": number, "end": number, "speed": number or "auto" or ramps, "transitionIn": "cut"|"dissolve"|"fadeIn", "transitionDuration": number, "transitionReason": string, "transitionOut": "fadeOut" (last shot only, optional), "transitionOutDuration": number, "role": string, "reason": string (max 25 words: why this clip, this range and this length here), "reuseReason": string}],
+ "omitted": [{"clip": key, "reason": string}]}`;
+  }
+
+  // ---------- generate / validate ----------
+  function context(set, t, m, w, style) {
+    const clips = Object.fromEntries(keyed(set).map(c => [c.k, clipCtx(c)]));
+    return { clips, music: musicCtx(m), style, targetLength: w ? w.length : null, lengthReason: "", strongSeconds: strongSecondsOf(set.clips) };
+  }
+  async function generate(regen) {
+    const set = curSet(), t = curTrack(); if (!set || !t || S.busy || !S.sample) return;
+    const style = S.style, m = modelOf(t.raw), wins = windowsOf(t, style), fixed = chosenWindow(t);
+    if (!wins.length) { log(`Der Track hat keine ${STYLES[style].label}-Kandidaten aus der Musik-Struktur.`, "bad"); return; }
+    S.busy = true; render();
+    const p = prompt(set, t, m, style, wins, fixed), t0 = performance.now();
+    log(`${regen ? "Regenerate" : "Generate"}: Director plant ${STYLES[style].label} mit ${set.clips.length} Clips, ${fixed ? `Abschnitt ${fixed.id}` : `${wins.length} Abschnitte zur Wahl`} …`);
+    try {
+      let plan = await S.sample.json(p, { modelTier: "complex", cache: false }), rounds = 0, v, w;
+      const check = pl => { w = fixed || wins.find(x => x.id === pl?.music?.excerptId) || null;
+        const ctx = context(set, t, m, w, style); ctx.lengthReason = pl?.lengthReason || "";
+        const pv = { ...pl, music: { ...(pl?.music || {}), start: w ? w.start : pl?.music?.start, startReason: pl?.music?.reason || "" } };
+        const res = validatePlan(pv, ctx); if (!w) res.errors.unshift(`Unbekannter Musikabschnitt "${pl?.music?.excerptId}". Erlaubt: ${(fixed ? [fixed] : wins).map(x => x.id).join(", ")}.`); return res; };
+      v = check(plan);
+      if (v.errors.length) {
+        rounds = 1; log(`Validierung: ${v.errors.length} Fehler, Director korrigiert einmal …`, "warn");
+        plan = await S.sample.json(`${p}\n\nYOUR PREVIOUS ANSWER:\n${JSON.stringify(plan)}\n\nTHE VALIDATOR FOUND THESE ERRORS:\n- ${v.errors.join("\n- ")}${v.warnings.length ? `\n\nAND THESE HINTS:\n- ${v.warnings.join("\n- ")}` : ""}\n\nReturn the complete corrected plan JSON. Keep your concept; change only what the errors require.`, { modelTier: "complex", cache: false });
+        v = check(plan);
+      }
+      const clips = keyed(set);
+      S.draft = { createdAt: new Date().toISOString(), regen: !!regen, rulesVersion: RULES_VERSION, style, ms: Math.round(performance.now() - t0), rounds, promptBytes: p.length,
+        input: { setId: set.id, setName: set.source?.setName, setSyncedAt: set.syncedAt, comparisonId: set.source?.comparisonId, comparedAt: set.source?.comparedAt,
+          analyses: clips.map(c => ({ key: c.k, filename: c.filename, analysisId: c.analysisId, version: c.analysisVersion, analyzedAt: c.analyzedAt })),
+          trackId: t.id, trackFile: t.filename, trackSyncedAt: t.syncedAt, musicAnalyzedAt: t.source?.analyzedAt, shotstackJobId: t.source?.shotstackJobId, windowMode: fixed ? "fixed" : "auto", windowId: w?.id || null, window: w ? { start: w.start, end: w.end, length: w.length, score: w.score } : null },
+        keys: Object.fromEntries(clips.map(c => [c.k, c.filename])), plan, validation: { errors: v.errors, warnings: v.warnings, info: v.info, total: v.total, music: v.music, screen: v.screen,
+          shots: v.shots.map(s => ({ n: s.n, clip: s.clip, sourceIn: s.sourceIn, sourceOut: s.sourceOut, start: s.start, end: s.end, length: s.length, speed: s.speed, transitionIn: s.transitionIn, transitionDuration: s.transitionDuration, transitionReason: s.transitionReason || "", fadeOut: s.fadeOut || 0, role: s.role, reason: s.reason, reuseReason: s.reuseReason || "" })) } };
+      S.view = null;
+      log(v.errors.length ? `Plan hat ${v.errors.length} Fehler (nach ${rounds} Korrekturrunde).` : `Plan fertig: ${v.shots.length} Shots, ${fx(v.total)} s, ${v.warnings.length} Hinweise.`, v.errors.length ? "bad" : "ok");
+    } catch (e) { log(`Claude-Aufruf fehlgeschlagen (${e?.code || "Fehler"}): ${e?.message || e}`, "bad"); }
+    finally { S.busy = false; render(); }
+  }
+  async function savePlan() {
+    const p = S.draft; if (!p || !S.db) return;
+    const id = "p" + Date.now().toString(36), n = S.plans.length + 1;
+    const doc = { ...p, name: `Plan ${n} · ${STYLES[p.style].label}`, savedAt: new Date().toISOString() };
+    await S.db.collection("plans").doc(id).set(doc); S.view = id; log(`${doc.name} gespeichert.`, "ok"); render();
+  }
+  async function delPlan(id) { if (S.confirmDel !== id) { S.confirmDel = id; render(); return; } S.confirmDel = null; await S.db.collection("plans").doc(id).delete(); if (S.view === id) S.view = null; render(); }
+
+  // ---------- events ----------
+  $("btn-gen").addEventListener("click", () => generate(false));
+  $("btn-regen").addEventListener("click", () => generate(true));
+  $("btn-save").addEventListener("click", savePlan);
+  document.addEventListener("change", e => {
+    const id = e.target.id;
+    if (id === "sel-set") { S.setId = e.target.value; try { localStorage.setItem("plannerSet", S.setId); } catch {} }
+    if (id === "sel-track") { S.trackId = e.target.value; S.win = "auto"; try { localStorage.setItem("plannerTrack", S.trackId); } catch {} }
+    if (id === "sel-window") { S.win = e.target.value; try { localStorage.setItem("plannerWin", S.win); } catch {} }
+    if (e.target.name === "style") { S.style = e.target.value; S.win = "auto"; try { localStorage.setItem("plannerStyle", S.style); } catch {} }
+    render();
+  });
+  document.addEventListener("click", e => { const b = e.target.closest("button[data-act]"); if (!b) return;
+    if (b.dataset.act === "open") { S.view = b.dataset.id; render(); $("plan").scrollIntoView({ behavior: "smooth", block: "start" }); }
+    if (b.dataset.act === "draft") { S.view = null; render(); }
+    if (b.dataset.act === "del") delPlan(b.dataset.id); });
+
+  // ---------- render ----------
+  function render() {
+    const set = curSet(), t = curTrack();
+    $("sel-set").innerHTML = S.sets.length ? S.sets.map(s => `<option value="${esc(s.id)}" ${s.id === S.setId ? "selected" : ""}>${esc(s.source?.setName || s.id)} · ${s.clips?.length || 0} Clips</option>`).join("") : `<option>nicht synchronisiert</option>`;
+    $("sel-track").innerHTML = S.tracks.length ? S.tracks.map(x => `<option value="${esc(x.id)}" ${x.id === S.trackId ? "selected" : ""}>${esc(x.filename)}</option>`).join("") : `<option>nicht synchronisiert</option>`;
+    $("set-info").innerHTML = set ? `<span>Clips</span><span>${set.clips.length} · Klassen ${["A", "B", "C", "D", "E"].map(k => `${k}:${set.clips.filter(c => c.priorityClass === k).length}`).join(" ")}</span><span>Vergleich</span><span>${fmtDate(set.source?.comparedAt)}${set.source?.comparisonCoversLatestAnalyses ? "" : ' · <b style="color:var(--warn)">nicht aktuell</b>'}</span><span>Analysen</span><span>${[...new Set(set.clips.map(c => "v" + c.analysisVersion))].join(", ")} · ${fmtDate(set.clips.map(c => c.analyzedAt).sort().pop())}</span><span>Sync</span><span>${fmtDate(set.syncedAt)}</span>` : `<span>–</span><span>Noch keine Daten. Im Chat „sync director“ sagen.</span>`;
+    $("track-info").innerHTML = t ? `<span>Dauer</span><span>${fx(t.duration)} s · ${t.raw?.bpm ? fx(t.raw.bpm, 1) + " BPM" : "BPM –"} · ${t.raw?.steady ? "gleichmäßig" : "variabel"}</span><span>Analyse</span><span>${fmtDate(t.source?.analyzedAt)}</span><span>Struktur</span><span>${(t.interpretation?.segments || []).length} Abschnitte, ${(t.interpretation?.keyMoments || []).length} Key Moments</span><span>Sync</span><span>${fmtDate(t.syncedAt)}</span>` : `<span>–</span><span>Noch keine Daten.</span>`;
+    const wins = t ? windowsOf(t, S.style) : [];
+    if (S.win !== "auto" && !wins.some(w => w.id === S.win)) S.win = "auto";
+    $("sel-window").innerHTML = `<option value="auto" ${S.win === "auto" ? "selected" : ""}>Director wählt (${wins.length} Kandidaten)</option>` + wins.map(w => `<option value="${w.id}" ${w.id === S.win ? "selected" : ""}>${w.id} · ${fx(w.start, 1)}–${fx(w.end, 1)} s · ${fx(w.score, 1)}</option>`).join("");
+    const fixed = t ? chosenWindow(t) : null;
+    $("window-info").innerHTML = t ? (fixed ? `<span>Abschnitt</span><span>${fx(fixed.start)}–${fx(fixed.end)} s (${fixed.length} s)</span><span>Score</span><span>${fx(fixed.score, 1)} für ${STYLES[S.style].label}</span>` : `<span>Modus</span><span>Der Director wählt einen der ${STYLES[S.style].label}-Kandidaten (23/25/27/30 s) aus der Musik-Struktur.</span>`) + `<span>Musik</span><span>immer am Stück, ohne Schnitt</span>` : "";
+    $("styles").innerHTML = Object.entries(STYLES).map(([k, s]) => `<label class="style"><span><input type="radio" name="style" value="${k}" ${k === S.style ? "checked" : ""}><b>${s.label}</b></span><span class="small muted">${s.short}</span></label>`).join("");
+    const ready = set && t && S.sample && !S.busy;
+    $("btn-gen").disabled = !ready; $("btn-regen").disabled = !ready || !S.draft; $("btn-save").disabled = !S.draft || !S.db || S.busy || S.plans.some(p => p.createdAt === S.draft.createdAt);
+    $("saved").innerHTML = (S.draft ? `<div class="item ${!S.view ? "cur" : ""}"><span><b>Aktueller Entwurf</b> <span class="small muted">· ${STYLES[S.draft.style].label} · ${fx(S.draft.validation.total, 1)} s · ${fmtDate(S.draft.createdAt)}${S.plans.some(p => p.createdAt === S.draft.createdAt) ? " · gespeichert" : " · nicht gespeichert"}</span></span><span class="acts"><button data-act="draft">Anzeigen</button></span></div>` : "")
+      + S.plans.map(p => `<div class="item ${S.view === p.id ? "cur" : ""}"><span><b>${esc(p.name)}</b> <span class="small muted">· ${fx(p.validation?.total, 1)} s · ${(p.validation?.shots || []).length} Shots · ${p.validation?.errors?.length ? `${p.validation.errors.length} Fehler` : "gültig"} · ${fmtDate(p.createdAt)}</span></span><span class="acts"><button data-act="open" data-id="${p.id}">Anzeigen</button><button class="danger" data-act="del" data-id="${p.id}">${S.confirmDel === p.id ? "Wirklich löschen?" : "Löschen"}</button></span></div>`).join("");
+    const shown = S.view ? S.plans.find(p => p.id === S.view) : S.draft;
+    $("plan").innerHTML = shown ? planView(shown) : `<section class="panel"><div class="empty">Hier erscheinen nach „Generate Plan“ Summary, Timeline, Shot-Liste und Validierung.</div></section>`;
+  }
+  const ROLE_COLOR = r => /hero/.test(r) ? "--cA" : /open|establish/.test(r) ? "--cB" : /final/.test(r) ? "--cA" : /burst|insert/.test(r) ? "--cD" : /secondary/.test(r) ? "--cC" : /breath/.test(r) ? "--energy" : "--cB";
+  function timeline(p, set, t) {
+    const v = p.validation, T = v.total || 1, X0 = 70, X1 = 990, W = X1 - X0, x = s => X0 + (s / T) * W;
+    const clipByKey = Object.fromEntries((set ? keyed(set) : []).map(c => [c.k, c]));
+    const out = [], yS = 18, hS = 46, ySrc = 70, yM = 104, hM = 46, yB = 156;
+    for (let s = 0; s <= T + 1e-6; s += (T > 40 ? 5 : 2)) out.push(`<line x1="${x(s)}" x2="${x(s)}" y1="${yS - 6}" y2="${yB + 16}" stroke="var(--line)"/><text x="${x(s)}" y="${yB + 30}" text-anchor="middle">${Math.round(s)}s</text>`);
+    for (const s of v.shots) {
+      const c = clipByKey[s.clip], w = Math.max(1, x(s.end) - x(s.start)), col = ROLE_COLOR(String(s.role || "").toLowerCase()), dark = col === "--cC" || col === "--cD";
+      out.push(`<rect x="${x(s.start) + 0.5}" y="${yS}" width="${w - 1}" height="${hS}" rx="4" fill="var(${col})"><title>${esc(`#${s.n} ${c?.filename || s.clip} · ${de(c?.roomType)} · ${s.role} · ${fx(s.start)}–${fx(s.end)}s · Source ${fx(s.sourceIn)}–${fx(s.sourceOut)}s · ${speedLabel(s.speed)}`)}</title></rect>`);
+      if (s.transitionIn === "dissolve") out.push(`<rect x="${x(s.start - s.transitionDuration)}" y="${yS}" width="${x(s.start) - x(s.start - s.transitionDuration)}" height="${hS}" fill="var(--dissolve)"><title>Dissolve ${s.transitionDuration}s</title></rect>`);
+      if (w > 34) out.push(`<text class="shotlabel ${dark ? "dark" : ""}" x="${x(s.start) + 5}" y="${yS + 15}">#${s.n} ${esc(de(c?.roomType).slice(0, Math.floor(w / 6.4)))}</text><text class="shotsub ${dark ? "dark" : ""}" x="${x(s.start) + 5}" y="${yS + 29}">${esc(String(s.role || "").slice(0, Math.floor(w / 6)))}</text><text class="shotsub ${dark ? "dark" : ""}" x="${x(s.start) + 5}" y="${yS + 41}">${esc(speedLabel(s.speed).slice(0, Math.floor(w / 6)))}</text>`);
+      // used source range inside the clip's duration, drawn under the shot
+      const D = +(c?.duration || 4), sx = x(s.start) + 2, sw = w - 4;
+      out.push(`<rect x="${sx}" y="${ySrc}" width="${Math.max(1, sw)}" height="8" rx="2" fill="var(--soft)"/>`);
+      if (c && isFinite(+c.usableStart)) out.push(`<rect x="${sx + sw * (+c.usableStart / D)}" y="${ySrc}" width="${Math.max(1, sw * ((+c.usableEnd - +c.usableStart) / D))}" height="8" rx="2" fill="var(--line)"/>`);
+      out.push(`<rect x="${sx + sw * (s.sourceIn / D)}" y="${ySrc + 1}" width="${Math.max(1, sw * ((s.sourceOut - s.sourceIn) / D))}" height="6" rx="2" fill="var(--accent)"><title>Source ${fx(s.sourceIn)}–${fx(s.sourceOut)}s von ${fx(D)}s</title></rect>`);
+    }
+    if (t) {
+      const m = modelOf(t.raw), st = v.music?.start ?? 0, inW = tt => tt >= st - 1e-3 && tt < st + T - 1e-3;
+      for (const b of m.bars) if (inW(b.t) && b.e != null) { const h = Math.max(1, b.e * hM); out.push(`<rect x="${x(b.t - st) + 0.5}" y="${yM + hM - h}" width="${Math.max(1, x(Math.min(b.end, st + T) - st) - x(b.t - st) - 1)}" height="${h}" fill="var(--energy)" opacity="0.75"><title>Takt ${b.i} · Energie ${b.e}</title></rect>`); }
+      for (const b of m.bars) if (inW(b.t)) out.push(`<line x1="${x(b.t - st)}" x2="${x(b.t - st)}" y1="${yB}" y2="${yB + 12}" stroke="var(--down)"/>`);
+      for (const s of m.sections) if (inW(s.time)) out.push(`<line x1="${x(s.time - st)}" x2="${x(s.time - st)}" y1="${yM - 4}" y2="${yB + 12}" stroke="var(--${s.change === "fall" ? "fall" : "rise"})" stroke-width="2"><title>Section ${s.change}</title></line>`);
+      for (const d of m.drops) if (inW(d.time)) out.push(`<path d="M${x(d.time - st) - 6},${yM - 8} L${x(d.time - st) + 6},${yM - 8} L${x(d.time - st)},${yM + 2} Z" fill="var(--drop)"><title>Drop</title></path>`);
+      for (const k of t.interpretation?.keyMoments || []) if (inW(k.time)) out.push(`<circle cx="${x(k.time - st)}" cy="${yB + 6}" r="3.5" fill="var(--moment)"><title>${esc(`${k.type}: ${k.note}`)}</title></circle>`);
+    }
+    out.push(`<text x="4" y="${yS + 26}">Shots</text><text x="4" y="${ySrc + 8}">Source</text><text x="4" y="${yM + hM - 4}">Musik</text><text x="4" y="${yB + 10}">Takte</text>`);
+    return `<svg viewBox="0 0 1000 ${yB + 38}" role="img" aria-label="Timeline: Shots, verwendete Source-Bereiche und Musik">${out.join("")}</svg>`;
+  }
+  function planView(p) {
+    const set = S.sets.find(s => s.id === p.input.setId), t = S.tracks.find(x => x.id === p.input.trackId), v = p.validation, pl = p.plan || {};
+    const byKey = Object.fromEntries((set ? keyed(set) : []).map(c => [c.k, c])), name = k => byKey[k]?.filename || p.keys?.[k] || k;
+    const uses = {}; v.shots.forEach(s => (uses[s.clip] ||= []).push(s));
+    const used = Object.keys(uses), omitted = (set ? keyed(set) : []).filter(c => !uses[c.k]), reused = used.filter(k => uses[k].length > 1);
+    const ok = !v.errors.length;
+    const rows = v.shots.map(s => { const c = byKey[s.clip], ramp = Array.isArray(s.speed);
+      return `<tr><td class="mono">${s.n}</td><td class="clipcell">${esc(name(s.clip))}${c ? ` <span class="cls ${esc(c.priorityClass)}">${esc(c.priorityClass)}</span>` : ""}</td><td>${esc(de(c?.roomType))}</td><td class="mono">${fx(s.sourceIn)}–${fx(s.sourceOut)}s</td><td class="mono">${tc(s.start)}–${tc(s.end)}</td><td class="mono">${fx(s.length)}s</td><td class="mono">${ramp ? "Ramp" : `${fx(+s.speed, 2)}×`}</td><td class="small">${ramp ? esc(speedLabel(s.speed)) : "–"}</td><td class="small">${s.transitionIn === "cut" ? "Cut" : `${esc(s.transitionIn)} ${s.transitionDuration}s`}${s.fadeOut ? ` · fadeOut ${s.fadeOut}s` : ""}${s.transitionReason ? `<div class="muted">${esc(s.transitionReason)}</div>` : ""}</td><td>${esc(s.role)}</td><td class="reason small">${esc(s.reason)}${s.reuseReason ? `<div class="muted">Wiederholung: ${esc(s.reuseReason)}</div>` : ""}</td></tr>`; }).join("");
+    const stat = (l, val) => `<div class="stat"><span class="label">${l}</span><span class="v">${val}</span></div>`;
+    return `<section class="panel" aria-labelledby="h-plan">
+      <div class="row between"><h2 id="h-plan">4 · Plan${S.view ? ` · ${esc(S.plans.find(x => x.id === S.view)?.name || "")}` : " · Entwurf"}</h2><span class="pill ${ok ? "ok" : "bad"}">${ok ? `gültig · ${v.warnings.length} Hinweise` : `${v.errors.length} Fehler`}</span></div>
+      <p class="concept">${esc(pl.concept)}</p>
+      <div class="summary">${stat("Style", STYLES[p.style].label)}${stat("Music Track", esc(p.input.trackFile))}${stat("Music Start", `${fx(v.music?.start)} s`)}${stat("Music End", `${fx(v.music?.end)} s`)}${stat("Final Duration", `${fx(v.total)} s`)}${stat("Shots", v.shots.length)}</div>
+      <div class="kv" style="grid-template-columns:minmax(150px,auto) minmax(0,1fr)"><span>Dramaturgie</span><span>${esc(pl.dramaturgy)}</span><span>Musikabschnitt</span><span>${esc(p.input.windowId || "–")} (${p.input.windowMode === "auto" ? "vom Director gewählt" : "fest gewählt"}) · ${esc(pl.music?.reason)}</span><span>Länge</span><span>${esc(pl.lengthReason)}</span>
+        <span>Used Clips</span><span>${used.map(k => `${esc(name(k))} (${uses[k].length}× · ${fx(uses[k].reduce((a, s) => a + s.length, 0), 1)} s)`).join(", ") || "–"}</span>
+        <span>Omitted Clips</span><span>${omitted.length ? omitted.map(c => `${esc(c.filename)} <span class="muted">(${esc((pl.omitted || []).find(o => o.clip === c.k)?.reason || "ohne Begründung")})</span>`).join(", ") : "keine"}</span>
+        <span>Reused Clips</span><span>${reused.length ? reused.map(k => esc(name(k))).join(", ") : "keine"}</span>
+        <span>Screentime</span><span>Hauptbereiche ${fx(v.screen?.mainSeconds, 1)} s · Nebenräume/wenig relevant ${fx(v.screen?.lowRelevanceSeconds, 1)} s ${tagCode()}</span></div>
+      <div><span class="label">Timeline</span><div class="tlbox" style="margin-top:6px">${timeline(p, set, t)}</div>
+        <div class="legend" style="margin-top:6px"><span><i style="background:var(--cA)"></i>Hero / Finale</span><span><i style="background:var(--cB)"></i>Opening / Establishing</span><span><i style="background:var(--cC)"></i>Secondary</span><span><i style="background:var(--cD)"></i>Insert / Burst</span><span><i style="background:var(--energy)"></i>Breath · Energie pro Takt</span><span><i style="background:var(--accent)"></i>verwendeter Source-Bereich (grau: nutzbar)</span><span><i style="background:var(--rise);width:3px"></i>Section rise</span><span><i style="background:var(--fall);width:3px"></i>Section fall</span><span><i style="background:var(--drop)"></i>Drop</span><span><i style="background:var(--moment);border-radius:50%"></i>Key Moment</span></div></div>
+      <div class="tablebox"><table><thead><tr><th>#</th><th>Source Clip</th><th>Raum</th><th>Source</th><th>Timeline</th><th>Länge</th><th>Speed</th><th>Ramp</th><th>Transition</th><th>Rolle</th><th>Begründung</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div><span class="label">Validation</span><ul class="issues" style="margin-top:6px">${v.errors.map(x => `<li class="e">Fehler: ${esc(x)}</li>`).join("")}${v.warnings.map(x => `<li class="w">Hinweis: ${esc(x)}</li>`).join("")}${v.info.map(x => `<li class="muted">${esc(x)}</li>`).join("")}${!v.errors.length && !v.warnings.length ? `<li class="muted">Keine Fehler, keine Hinweise.</li>` : ""}</ul></div>
+      <details><summary>Debug</summary><div class="kv" style="margin-top:8px;grid-template-columns:minmax(170px,auto) minmax(0,1fr)">
+        <span>Erstellt</span><span>${fmtDate(p.createdAt)}${p.savedAt ? ` · gespeichert ${fmtDate(p.savedAt)}` : ""} · ${(p.ms / 1000).toFixed(0)} s · Korrekturrunden ${p.rounds} · Prompt ${(p.promptBytes / 1024).toFixed(1)} KB${p.regen ? " · Regenerate" : ""}</span>
+        <span>Director-Regeln</span><span>${esc(p.rulesVersion)} · Validierung: validatePlan aus dem alten Director (unverändert) · Musikraster: Musik-Struktur</span>
+        <span>Clipanalyse</span><span>${esc(p.input.setName)} (${esc(p.input.setId)}) · Vergleich ${esc(p.input.comparisonId)} vom ${fmtDate(p.input.comparedAt)} · Sync ${fmtDate(p.input.setSyncedAt)}</span>
+        <span>Analysen pro Clip</span><span class="mono">${p.input.analyses.map(a => `${a.key} ${esc(a.filename)} v${a.version}`).join(" · ")}</span>
+        <span>Musikdaten</span><span>${esc(p.input.trackFile)} (${esc(p.input.trackId)}) · Analyse ${fmtDate(p.input.musicAnalyzedAt)} · Shotstack-Job ${esc(p.input.shotstackJobId || "–")} · Abschnitt ${p.input.window ? `${fx(p.input.window.start)}–${fx(p.input.window.end)} s, Score ${fx(p.input.window.score, 1)}` : "–"}</span>
+      </div>
+      <details style="margin-top:8px"><summary>Plan-JSON vom Director</summary><pre>${esc(JSON.stringify(pl, null, 1))}</pre></details></details>
+    </section>`;
+  }
+  const tagCode = () => `<span class="pill">Code</span>`;
+
+  boot();
+})();
+</script>
