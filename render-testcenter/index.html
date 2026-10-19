@@ -1,0 +1,644 @@
+<title>Render Testcenter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:wght@400;600&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a render bench: inputs (clips, music, plan), matching and checks, then the exact Shotstack edit, the render job and its result */
+:root {
+  --bg: #eff0ee; --panel: #fbfbfa; --ink: #1b1c1b; --muted: #636661; --line: #d8dad5; --soft: #e5e7e2;
+  --accent: #1f6b5c; --accent-ink: #ffffff; --ok: #237a4b; --warn: #946200; --bad: #b42d23;
+  --shot: #6c9c8f; --shot-hero: #1f6b5c; --micro: #c9a35c; --rev: #8a4fb8; --beat: #a8aaa3;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "Martian Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121412; --panel: #1a1c1a; --ink: #e8eae5; --muted: #9da197; --line: #333631; --soft: #242723;
+  --accent: #6fc4ae; --accent-ink: #121412; --ok: #5fc58c; --warn: #e0b04a; --bad: #f07a6e;
+  --shot: #4c7268; --shot-hero: #6fc4ae; --micro: #a78748; --rev: #b78ae0; --beat: #5a5d57; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #121412; --panel: #1a1c1a; --ink: #e8eae5; --muted: #9da197; --line: #333631; --soft: #242723;
+  --accent: #6fc4ae; --accent-ink: #121412; --ok: #5fc58c; --warn: #e0b04a; --bad: #f07a6e;
+  --shot: #4c7268; --shot-hero: #6fc4ae; --micro: #a78748; --rev: #b78ae0; --beat: #5a5d57; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15.5px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 20px; }
+.wrap > *, section.panel > *, .cols > * { min-width: 0; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 1.15rem; font-weight: 800; }
+h3 { font-size: 0.98rem; font-weight: 600; }
+p { margin: 0; }
+.muted { color: var(--muted); } .small { font-size: 0.86rem; }
+.mono { font-family: var(--f-mono); font-size: 0.84em; font-variant-numeric: tabular-nums; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; }
+button, select, input, textarea { font: inherit; }
+button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:focus-visible, select:focus-visible, summary:focus-visible, .drop:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+select { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 5px 8px; max-width: 100%; }
+a { color: var(--accent); }
+header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+header.top .lead { max-width: 70ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.78rem; background: var(--panel); white-space: nowrap; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--beat); }
+.chip.on i { background: var(--ok); } .chip.off i { background: var(--bad); }
+section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 14px; align-content: start; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.row.between { justify-content: space-between; }
+.cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 980px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 14px; text-align: center; cursor: pointer; display: grid; gap: 2px; }
+.drop.over { border-color: var(--accent); background: var(--soft); }
+.drop strong { font-family: var(--f-display); font-size: 1rem; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+.tablebox { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
+td.n { font-family: var(--f-mono); font-size: 0.76rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 0 7px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.fact { background: var(--bg); border-radius: 10px; padding: 8px 12px; display: grid; gap: 1px; }
+.fact .v { font-family: var(--f-display); font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fact .v.t { font-family: var(--f-body); font-size: 0.95rem; font-weight: 600; }
+.checks { display: grid; gap: 10px; }
+.group { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.88rem; }
+@media (max-width: 620px) { .group { grid-template-columns: minmax(0, 1fr); } }
+.group ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+.banner { border-left: 4px solid currentColor; background: var(--soft); border-radius: 0 10px 10px 0; padding: 10px 14px; display: grid; gap: 4px; }
+.banner > * { color: var(--ink); }
+.banner b { font-family: var(--f-display); }
+.steps { display: flex; flex-wrap: wrap; gap: 6px; }
+.steps span { font-family: var(--f-mono); font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+.steps span.done { color: var(--ok); border-color: var(--ok); } .steps span.now { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); } .steps span.fail { color: var(--bad); border-color: var(--bad); }
+.tlbox { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.tlbox svg { display: block; min-width: 760px; width: 100%; height: auto; }
+svg text { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
+svg .lbl { fill: var(--ink); font-family: var(--f-body); font-size: 11px; font-weight: 600; }
+svg .lbl.inv { fill: var(--accent-ink); }
+pre { margin: 0; font-family: var(--f-mono); font-size: 0.72rem; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; background: var(--bg); padding: 10px; border-radius: 8px; }
+details summary { cursor: pointer; font-weight: 600; }
+#debug li { overflow-wrap: anywhere; }
+.notice { border-left: 3px solid var(--warn); padding: 8px 12px; background: var(--soft); border-radius: 0 8px 8px 0; font-size: 0.9rem; }
+.notice.info { border-left-color: var(--accent); }
+video { width: 100%; max-height: 520px; background: #000; border-radius: 10px; }
+.kv { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 4px 14px; font-size: 0.88rem; }
+@media (max-width: 620px) { .kv { grid-template-columns: minmax(0, 1fr); } }
+.kv > * { min-width: 0; overflow-wrap: anywhere; }
+td { overflow-wrap: anywhere; }
+.log { font-family: var(--f-mono); font-size: 0.74rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 150px; overflow: auto; white-space: pre-wrap; }
+textarea { width: 100%; font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 8px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="lead">
+      <h1>Render Testcenter</h1>
+      <p class="muted">Übersetzt einen fertigen Video-Director-Plan (<span class="mono">video-director-plan@1</span>) exakt in ein Shotstack-Edit und rendert ihn auf Shotstack Stage. Keine kreativen Entscheidungen, keine automatische Reparatur.</p>
+    </div>
+    <div class="chips" aria-label="Verfügbarkeit">
+      <span class="chip" id="cap-db"><i></i>Speicher</span>
+      <span class="chip" id="cap-dl"><i></i>Download</span>
+      <span class="chip on"><i></i>Stage only</span>
+    </div>
+  </header>
+  <p class="notice" id="nocaps" hidden></p>
+
+  <div class="cols">
+    <section class="panel" aria-labelledby="h-clips">
+      <h2 id="h-clips">1 · Video Clips</h2>
+      <div class="drop" id="drop-clips" tabindex="0" role="button" aria-label="MP4-Clips hochladen"><strong>Clips laden</strong><span class="small muted">mehrere MP4 hierher ziehen oder klicken</span></div>
+      <input type="file" id="file-clips" accept="video/mp4,.mp4,.mov" multiple hidden>
+      <div id="clips-info"></div>
+    </section>
+    <section class="panel" aria-labelledby="h-music">
+      <h2 id="h-music">2 · Music File</h2>
+      <div class="drop" id="drop-music" tabindex="0" role="button" aria-label="Musikdatei hochladen"><strong>Musik laden</strong><span class="small muted">MP3, WAV oder M4A</span></div>
+      <input type="file" id="file-music" accept="audio/*,.mp3,.wav,.m4a" hidden>
+      <div id="music-info"></div>
+    </section>
+    <section class="panel" aria-labelledby="h-plan">
+      <h2 id="h-plan">3 · Edit Plan JSON</h2>
+      <div class="drop" id="drop-plan" tabindex="0" role="button" aria-label="Director-Plan hochladen"><strong>Plan laden</strong><span class="small muted">video-director-plan@1 aus dem Video Director</span></div>
+      <input type="file" id="file-plan" accept=".json,application/json" hidden>
+      <div id="plan-info"></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="h-match">
+    <h2 id="h-match">4 · Asset Matching</h2>
+    <div id="match"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-val">
+    <div class="row between"><h2 id="h-val">5 · Pre-Render Validation</h2><span id="val-state" class="small"></span></div>
+    <div id="validation"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-assets">
+    <div class="row between"><h2 id="h-assets">6 · Shotstack Stage Assets</h2><button class="primary" id="btn-upload" disabled>Upload Assets to Shotstack</button></div>
+    <div id="assets"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-tl">
+    <h2 id="h-tl">7 · Timeline Preview</h2>
+    <div id="timeline"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-json">
+    <div class="row between"><h2 id="h-json">8 · Shotstack JSON</h2><div class="row"><button id="btn-copy" disabled>Copy JSON</button><button id="btn-dl" disabled>Download JSON</button></div></div>
+    <p class="small muted" id="json-note" hidden></p>
+    <textarea id="json-fallback" rows="6" readonly hidden aria-label="Shotstack JSON zum manuellen Kopieren"></textarea>
+    <div id="json"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-render">
+    <div class="row between"><h2 id="h-render">9 · Render</h2><button class="primary" id="btn-render" disabled>Render Stage Video</button></div>
+    <div id="reverse-status"></div>
+    <div id="render"></div>
+    <div class="log" id="log" aria-live="polite">Bereit. Lade Clips, Musik und Plan.</div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-debug">
+    <h2 id="h-debug">10 · Debug</h2>
+    <div id="debug"></div>
+  </section>
+</div>
+
+<script>
+// ===== CORE-BEGIN: pure functions (no DOM, no network): read the plan, match files, simulate every shot, validate, build the edit =====
+const SCHEMA = "video-director-plan@1", BUILDER_VERSION = "render-testcenter-builder/1 · 2026-10-19";
+const r4 = x => Math.round(x * 10000) / 10000;
+const r3 = x => Math.round(x * 1000) / 1000;
+const num = x => (typeof x === "number" && isFinite(x)) ? x : null;
+const TRANS = new Set(["none", "hard-cut", "crossfade", "dip-to-black", "fade-in", "fade-out"]);
+const EPS = 0.002; // timeline equality (2 ms)
+
+function readPlan(j) {
+  const errors = [];
+  if (!j || typeof j !== "object") return { errors: ["Keine JSON-Struktur."] };
+  if (j.meta?.schema !== SCHEMA) return { errors: [`Falsches Schema: ${j.meta?.schema ?? "fehlt"}. Erwartet: ${SCHEMA}.`] };
+  if (!Array.isArray(j.shots) || !j.shots.length) errors.push("Der Plan enthält keine Shots.");
+  if (!j.timeline || num(j.timeline.duration) == null) errors.push("timeline.duration fehlt.");
+  if (!j.music || !j.music.used) errors.push("music.used fehlt.");
+  return { errors, plan: errors.length ? null : j };
+}
+const requiredClips = plan => [...new Set(plan.shots.map(s => s.sourceClip))];
+
+// match local files to the plan by filename (exact first, then case-insensitive, which is reported)
+function matchClips(plan, files) {
+  const req = requiredClips(plan), rows = [], byName = {};
+  for (const f of files) (byName[f.name] ||= []).push(f);
+  for (const name of req) {
+    let list = byName[name] || [], how = "exact";
+    if (!list.length) { list = files.filter(f => f.name.toLowerCase() === String(name).toLowerCase()); how = "case-insensitive"; }
+    rows.push({ name, status: list.length === 1 ? "MATCHED" : list.length > 1 ? "DUPLICATE" : "MISSING", file: list.length === 1 ? list[0] : null, how: list.length === 1 ? how : null, count: list.length });
+  }
+  const used = new Set(rows.filter(r => r.file).map(r => r.file));
+  const unused = files.filter(f => !used.has(f)).map(f => ({ name: f.name, status: "UNUSED", file: f }));
+  return { rows, unused };
+}
+// reuse an asset already on Shotstack stage: same byte size and duration within 0.1 s (stage keeps no filename for every source)
+function findStage(stage, file) {
+  if (!file) return null;
+  const c = stage.filter(a => a.status !== "deleted" && a.filesize === file.size && (a.duration == null || file.duration == null || Math.abs(a.duration - file.duration) <= 0.1));
+  return c.find(a => a.filename === file.name) || (c.length === 1 ? c[0] : null);
+}
+
+// ---- speed: a number, or a Tween array in clip time (linear between from and to); position = trim + integral of speed ----
+function speedPieces(spec, length) {
+  if (typeof spec === "number" || spec == null) return [{ t0: 0, t1: length, v0: spec ?? 1, v1: spec ?? 1 }];
+  const tw = [...spec].sort((a, b) => a.start - b.start), out = [];
+  let t = 0;
+  if (tw.length && tw[0].start > 0) { out.push({ t0: 0, t1: tw[0].start, v0: tw[0].from, v1: tw[0].from }); t = tw[0].start; }
+  for (const w of tw) { out.push({ t0: w.start, t1: w.start + w.length, v0: w.from, v1: w.to }); t = w.start + w.length; }
+  const last = tw[tw.length - 1];
+  if (last && t < length) out.push({ t0: t, t1: length, v0: last.to, v1: last.to });
+  return out;
+}
+// source position over the clip: end position, min and max (extremes sit at piece ends or where the speed crosses 0)
+function simulate(trim, spec, length) {
+  let p = trim, lo = trim, hi = trim;
+  for (const k of speedPieces(spec, length)) {
+    const a = Math.max(0, k.t0), b = Math.min(length, k.t1); if (b <= a) continue;
+    const slope = (k.v1 - k.v0) / Math.max(1e-9, k.t1 - k.t0), va = k.v0 + slope * (a - k.t0), vb = k.v0 + slope * (b - k.t0);
+    if (va * vb < 0) { const tz = a + (-va) / slope, pz = p + va * (tz - a) / 2; lo = Math.min(lo, pz); hi = Math.max(hi, pz); }
+    p += (va + vb) / 2 * (b - a); lo = Math.min(lo, p); hi = Math.max(hi, p);
+  }
+  return { end: p, lo, hi };
+}
+function tweenIssues(spec, length) {
+  const out = []; if (!Array.isArray(spec)) return out;
+  const tw = [...spec].sort((a, b) => a.start - b.start);
+  tw.forEach((w, i) => {
+    if (![w.from, w.to, w.start, w.length].every(x => typeof x === "number" && isFinite(x))) out.push(`Tween ${i + 1} hat keine gültigen Zahlen.`);
+    if (w.length <= 0) out.push(`Tween ${i + 1} hat Länge ${w.length}.`);
+    if (Math.abs(w.from) > 10 || Math.abs(w.to) > 10) out.push(`Tween ${i + 1}: Speed außerhalb ±10.`);
+    if (w.interpolation && w.interpolation !== "linear") out.push(`Tween ${i + 1}: Interpolation „${w.interpolation}“; der Builder rechnet linear.`);
+    if (i && Math.abs(w.start - (tw[i - 1].start + tw[i - 1].length)) > EPS) out.push(`Tween ${i + 1} beginnt bei ${w.start} s, Tween ${i} endet bei ${r4(tw[i - 1].start + tw[i - 1].length)} s (Lücke oder Überlappung).`);
+  });
+  if (tw.length && tw[0].start > EPS) out.push(`Erster Tween beginnt erst bei ${tw[0].start} s.`);
+  const end = tw.length ? tw[tw.length - 1].start + tw[tw.length - 1].length : 0;
+  if (tw.length && Math.abs(end - length) > 0.02) out.push(`Tweens decken ${r4(end)} s ab, der Shot dauert ${length} s.`);
+  return out;
+}
+const vAt = (spec, t) => typeof spec === "number" ? spec : (() => { const k = speedPieces(spec, Infinity).find(x => t >= x.t0 - 1e-9 && t <= x.t1 + 1e-9) || speedPieces(spec, Infinity).slice(-1)[0]; return k.v0 + (k.v1 - k.v0) * ((t - k.t0) / Math.max(1e-9, k.t1 - k.t0)); })();
+
+// ---- build: plan shot -> Shotstack clip; visible cuts stay at the plan's times ----
+// crossfade: the incoming shot sits on a track above, starts d/2 early and fades its opacity 0->1 over d (centred on the cut);
+// the outgoing shot runs d/2 longer underneath. dip-to-black: no overlap, out-fade in the last d/2, in-fade in the first d/2.
+// fade-in / fade-out: opacity over the given duration. Shotstack's preset transitions have engine-fixed timing, so they are not used.
+function shotGeometry(s, i, shots) {
+  const lead = s.transitionIn === "crossfade" ? (s.transitionInDuration || 0) / 2 : 0;
+  const tail = s.transitionOut === "crossfade" ? (s.transitionOutDuration || 0) / 2 : 0;
+  const spec = s.builder?.speed ?? s.playbackSpeed ?? 1, trim0 = s.builder?.trim ?? s.sourceStart;
+  return { lead, tail, spec, trim0, vStart: vAt(spec, 0), vEnd: vAt(spec, s.duration) };
+}
+function opacityTween(s, g, L) {
+  const parts = [];
+  if (s.transitionIn === "fade-in") parts.push({ a: 0, b: s.transitionInDuration, from: 0, to: 1 });
+  if (s.transitionIn === "crossfade") parts.push({ a: 0, b: 2 * g.lead, from: 0, to: 1 });
+  if (s.transitionIn === "dip-to-black") parts.push({ a: 0, b: s.transitionInDuration / 2, from: 0, to: 1 });
+  if (s.transitionOut === "dip-to-black") parts.push({ a: L - s.transitionOutDuration / 2, b: L, from: 1, to: 0 });
+  if (s.transitionOut === "fade-out") parts.push({ a: L - s.transitionOutDuration, b: L, from: 1, to: 0 });
+  if (!parts.length) return null;
+  parts.sort((x, y) => x.a - y.a);
+  const out = []; let t = 0;
+  for (const p of parts) { if (p.a > t + 1e-6) out.push({ from: 1, to: 1, start: r4(t), length: r4(p.a - t), interpolation: "linear" }); out.push({ from: p.from, to: p.to, start: r4(p.a), length: r4(p.b - p.a), interpolation: "linear" }); t = p.b; }
+  if (t < L - 1e-6) out.push({ from: 1, to: 1, start: r4(t), length: r4(L - t), interpolation: "linear" });
+  return out;
+}
+function buildEdit(plan, urls, settings) {
+  const shots = [...plan.shots].sort((a, b) => a.shotNumber - b.shotNumber), notes = [], levels = [];
+  shots.forEach((s, i) => { levels[i] = i && s.transitionIn === "crossfade" ? levels[i - 1] + 1 : 0; });
+  const clipsByLevel = {}, shotMap = [];
+  shots.forEach((s, i) => {
+    const g = shotGeometry(s, i, shots), L = r4(s.duration + g.lead + g.tail), trim = r4(g.trim0 - g.vStart * g.lead);
+    let speed;
+    if (typeof g.spec === "number") speed = g.spec;
+    else {
+      speed = [];
+      if (g.lead > 0) speed.push({ from: r4(g.vStart), to: r4(g.vStart), start: 0, length: r4(g.lead), interpolation: "linear" });
+      for (const w of [...g.spec].sort((a, b) => a.start - b.start)) speed.push({ from: w.from, to: w.to, start: r4(w.start + g.lead), length: w.length, interpolation: "linear" });
+      if (g.tail > 0) speed.push({ from: r4(g.vEnd), to: r4(g.vEnd), start: r4(g.lead + s.duration), length: r4(g.tail), interpolation: "linear" });
+    }
+    const asset = { type: "video", src: urls[s.sourceClip] || `pending://${s.sourceClip}`, trim, volume: 0 };
+    if (!(typeof speed === "number" && speed === 1)) asset.speed = speed;
+    const clip = { asset, start: r4(s.timelineStart - g.lead), length: L, fit: "crop" };
+    const op = opacityTween(s, g, L); if (op) clip.opacity = op;
+    (clipsByLevel[levels[i]] ||= []).push(clip);
+    shotMap.push({ shot: s.shotNumber, source: s.sourceClip, level: levels[i], trim, clipStart: clip.start, clipLength: L, visible: [s.timelineStart, s.timelineEnd], lead: r4(g.lead), tail: r4(g.tail), speed, opacity: op || null, sim: simulate(trim, speed, L) });
+    if (s.builder?.approximation) notes.push(`Shot ${s.shotNumber}: ${s.builder.approximation}`);
+  });
+  const maxL = Math.max(...levels), tracks = [];
+  for (let l = maxL; l >= 0; l--) tracks.push({ clips: clipsByLevel[l] });
+  const m = plan.music.used, D = r4(m.duration), fade = musicFade(plan);
+  const audio = { type: "audio", src: urls.__music || `pending://${plan.music.filename}`, trim: r4(m.trackStart) };
+  audio.volume = fade.seconds ? [{ from: 1, to: 1, start: 0, length: r4(D - fade.seconds), interpolation: "linear" }, { from: 1, to: 0, start: r4(D - fade.seconds), length: r4(fade.seconds), interpolation: "linear" }] : 1;
+  tracks.push({ clips: [{ asset: audio, start: 0, length: D }] });
+  const edit = { timeline: { background: "#000000", tracks }, output: { format: "mp4", resolution: settings.resolution, fps: settings.fps } };
+  return { edit, shotMap, notes, levels };
+}
+// music fade-out: only when the plan has music.fadeOut; its length is the last shot's fade-out duration (the plan's own value)
+function musicFade(plan) {
+  if (!plan.music.fadeOut) return { seconds: 0, source: "kein music.fadeOut im Plan" };
+  const last = [...plan.shots].sort((a, b) => a.shotNumber - b.shotNumber).slice(-1)[0];
+  if (last?.transitionOut === "fade-out" && num(last.transitionOutDuration)) return { seconds: last.transitionOutDuration, source: `Fade-out des letzten Shots (${last.transitionOutDuration} s)` };
+  return { seconds: 0, source: null, error: "music.fadeOut ist gesetzt, der Plan nennt aber keine Dauer (der letzte Shot hat kein fade-out)." };
+}
+
+// ---- validation: everything is checked against the plan and the real files; nothing is repaired ----
+function validate(ctx) {
+  const { plan, clipMatch, music, durations, stage } = ctx, G = {}, add = (g, level, msg) => (G[g] ||= []).push({ level, msg });
+  for (const g of ["PLAN", "FILES", "SOURCE TIME", "TIMELINE", "MUSIC", "TRANSITIONS", "REVERSE"]) G[g] = [];
+  if (!plan) { add("PLAN", "error", "Kein gültiger Plan geladen."); return finish(G); }
+  // PLAN
+  add("PLAN", "ok", `Schema ${SCHEMA}, ${plan.shots.length} Shots, ${plan.timeline.duration} s.`);
+  const st = plan.meta?.status;
+  if (st === "needs-repair" || st === "failed") add("PLAN", "error", `Plan-Status „${st}“: der Director hat diesen Plan nicht freigegeben.`);
+  else if (st === "final-with-warnings" && !plan.meta?.acceptedUnresolved) add("PLAN", "error", "Plan „final with unresolved creative warnings“ ohne Bestätigung.");
+  else if (!st) add("PLAN", "warn", "Plan ohne meta.status (älterer Export).");
+  if (plan.validation && plan.validation.passed === false) add("PLAN", "error", "Die technische Prüfung des Directors ist nicht bestanden.");
+  const shots = [...plan.shots], sorted = [...shots].sort((a, b) => a.shotNumber - b.shotNumber);
+  if (shots.some((s, i) => s.shotNumber !== sorted[i].shotNumber)) add("TIMELINE", "warn", "Shots stehen im JSON nicht in Nummernfolge; verwendet wird die Reihenfolge nach shotNumber.");
+  const D = plan.timeline.duration;
+  if (!(D > 0 && D < 600)) add("PLAN", "error", `Videodauer ${D} s ist nicht plausibel.`);
+  // FILES
+  for (const r of clipMatch.rows) {
+    if (r.status === "MISSING") add("FILES", "error", `Missing asset: ${r.name}`);
+    else if (r.status === "DUPLICATE") add("FILES", "error", `${r.name} ist ${r.count}× hochgeladen; eindeutige Zuordnung nicht möglich.`);
+    else if (r.how === "case-insensitive") add("FILES", "warn", `${r.name} nur ohne Groß-/Kleinschreibung gefunden (${r.file.name}).`);
+    if (r.file && durations[r.file.name] == null) add("FILES", "error", `${r.name}: Dauer der Datei konnte nicht gelesen werden.`);
+  }
+  if (!music.file) add("FILES", "error", `Musik fehlt (${plan.music.filename}).`);
+  else if (music.how === "manual") add("FILES", "warn", `Musik manuell zugeordnet: ${music.file.name} → ${plan.music.filename}.`);
+  if (clipMatch.rows.every(r => r.status === "MATCHED") && music.file) add("FILES", "ok", `Alle ${clipMatch.rows.length} Clips und die Musik zugeordnet.`);
+  // TIMELINE
+  sorted.forEach((s, i) => {
+    if (!(s.timelineEnd > s.timelineStart)) add("TIMELINE", "error", `Shot ${s.shotNumber}: timelineEnd ${s.timelineEnd} liegt nicht nach timelineStart ${s.timelineStart}.`);
+    if (Math.abs(s.timelineEnd - s.timelineStart - s.duration) > EPS) add("TIMELINE", "error", `Shot ${s.shotNumber}: duration ${s.duration} ≠ timelineEnd − timelineStart (${r4(s.timelineEnd - s.timelineStart)}).`);
+    const nx = sorted[i + 1];
+    if (nx && nx.timelineStart - s.timelineEnd > EPS) add("TIMELINE", "error", `Gap zwischen Shot ${s.shotNumber} und ${nx.shotNumber}: ${r4(nx.timelineStart - s.timelineEnd)} s.`);
+    if (nx && s.timelineEnd - nx.timelineStart > EPS) add("TIMELINE", "error", `Overlap zwischen Shot ${s.shotNumber} und ${nx.shotNumber}: ${r4(s.timelineEnd - nx.timelineStart)} s.`);
+  });
+  if (Math.abs(sorted[0].timelineStart) > EPS) add("TIMELINE", "error", `Shot 1 beginnt bei ${sorted[0].timelineStart} s statt 0.`);
+  if (Math.abs(sorted[sorted.length - 1].timelineEnd - D) > EPS) add("TIMELINE", "error", `Letzter Shot endet bei ${sorted[sorted.length - 1].timelineEnd} s, timeline.duration ist ${D} s.`);
+  if (!G.TIMELINE.some(x => x.level === "error")) add("TIMELINE", "ok", `Lückenlos von 0 bis ${D} s, Reihenfolge nach shotNumber.`);
+  // MUSIC
+  const m = plan.music.used, mdur = music.file ? durations[music.file.name] : null;
+  if (!(m.trackStart >= 0)) add("MUSIC", "error", `Music start ${m.trackStart} s ist ungültig.`);
+  if (Math.abs(m.trackEnd - m.trackStart - m.duration) > EPS) add("MUSIC", "error", `music.used: trackEnd − trackStart (${r4(m.trackEnd - m.trackStart)}) ≠ duration (${m.duration}).`);
+  if (Math.abs(m.duration - D) > EPS) add("MUSIC", "error", `Musikdauer ${m.duration} s ≠ Videodauer ${D} s.`);
+  if (mdur != null && m.trackEnd > mdur + 0.01) add("MUSIC", "error", `Music file duration ${r3(mdur)}s is shorter than required trackEnd ${m.trackEnd}s.`);
+  if (plan.music.continuous !== true || plan.music.internalCuts || plan.music.loops || plan.music.jumps) add("MUSIC", "error", "Der Plan meldet keine durchgehende Musik (continuous/internalCuts/loops/jumps).");
+  const fade = musicFade(plan); if (fade.error) add("MUSIC", "error", fade.error);
+  if (!G.MUSIC.some(x => x.level === "error")) add("MUSIC", "ok", `Ein Audio-Clip: Track ${m.trackStart} → ${m.trackEnd} s am Stück${fade.seconds ? `, Fade-out ${fade.seconds} s (${fade.source})` : ", kein Fade"}${mdur != null ? `; Datei ${r3(mdur)} s` : ""}.`);
+  // SOURCE TIME, TRANSITIONS, REVERSE: per shot, through the same geometry the builder uses
+  const urls = {}; const built = buildEdit(plan, urls, ctx.settings);
+  sorted.forEach((s, i) => {
+    const r = clipMatch.rows.find(x => x.name === s.sourceClip), cd = r?.file ? durations[r.file.name] : null, g = shotGeometry(s, i, sorted), sm = built.shotMap[i], k = s.shotNumber;
+    // transitions
+    for (const [v, side] of [[s.transitionIn, "transitionIn"], [s.transitionOut, "transitionOut"]]) if (!TRANS.has(v)) add("TRANSITIONS", "error", `Shot ${k}: ${side} „${v}“ ist nicht umsetzbar.`);
+    const nx = sorted[i + 1];
+    if (s.transitionOut === "crossfade" && (!nx || nx.transitionIn !== "crossfade" || Math.abs((nx.transitionInDuration || 0) - (s.transitionOutDuration || 0)) > EPS)) add("TRANSITIONS", "error", `Shot ${k}: Crossfade-Out passt nicht zum Crossfade-In von Shot ${nx?.shotNumber ?? "–"}.`);
+    for (const [v, d, side] of [[s.transitionIn, s.transitionInDuration, "in"], [s.transitionOut, s.transitionOutDuration, "out"]]) if (TRANS.has(v) && v !== "none" && v !== "hard-cut" && !(d > 0)) add("TRANSITIONS", "error", `Shot ${k}: ${v} (${side}) ohne Dauer.`);
+    const fadeSum = (s.transitionIn === "crossfade" ? s.transitionInDuration : s.transitionIn === "fade-in" ? s.transitionInDuration : s.transitionIn === "dip-to-black" ? s.transitionInDuration / 2 : 0) + (s.transitionOut === "fade-out" ? s.transitionOutDuration : s.transitionOut === "dip-to-black" ? s.transitionOutDuration / 2 : 0);
+    if (fadeSum > sm.clipLength + EPS) add("TRANSITIONS", "error", `Shot ${k}: Übergänge (${r4(fadeSum)} s) länger als der Clip (${sm.clipLength} s).`);
+    if (g.lead && Math.abs(Math.abs(g.vStart) * g.lead - (s.sourceHandleBefore || 0)) > 0.04) add("TRANSITIONS", "error", `Shot ${k}: Crossfade braucht ${r4(Math.abs(g.vStart) * g.lead)} s Source-Handle vorne, der Plan nennt ${s.sourceHandleBefore || 0} s.`);
+    if (g.tail && Math.abs(Math.abs(g.vEnd) * g.tail - (s.sourceHandleAfter || 0)) > 0.04) add("TRANSITIONS", "error", `Shot ${k}: Crossfade braucht ${r4(Math.abs(g.vEnd) * g.tail)} s Source-Handle hinten, der Plan nennt ${s.sourceHandleAfter || 0} s.`);
+    // source time (visible part of the shot and the full clip including handles)
+    const vis = simulate(g.trim0, g.spec, s.duration);
+    if (s.sourceStart < -EPS) add("SOURCE TIME", "error", `Shot ${k}: sourceStart ${s.sourceStart} < 0.`);
+    if (Math.abs(vis.end - s.sourceEnd) > 0.04) add("SOURCE TIME", "error", `Shot ${k}: trim ${g.trim0} + Speed über ${s.duration} s endet bei ${r4(vis.end)} s, der Plan sagt sourceEnd ${s.sourceEnd} s.`);
+    if (Array.isArray(s.sourceRange) && (vis.lo < s.sourceRange[0] - 0.04 || vis.hi > s.sourceRange[1] + 0.04)) add("SOURCE TIME", "error", `Shot ${k}: sichtbarer Bereich ${r4(vis.lo)}–${r4(vis.hi)} s liegt außerhalb sourceRange ${s.sourceRange.join("–")} s.`);
+    if (cd != null) {
+      if (sm.sim.lo < -0.02) add("SOURCE TIME", "error", `Shot ${k}: braucht Source ab ${r4(sm.sim.lo)} s (vor Clipbeginn)${g.lead ? ", inklusive Crossfade-Handle" : ""}.`);
+      if (sm.sim.hi > cd + 0.02) add("SOURCE TIME", "error", `Shot ${k}: braucht Source bis ${r4(sm.sim.hi)} s, ${s.sourceClip} dauert ${r3(cd)} s${g.tail || g.lead ? " (inklusive Crossfade-Handle)" : ""}.`);
+      for (const [n, seg] of (s.segments || []).entries()) if (Math.max(seg.sourceStart, seg.sourceEnd) > cd + 0.02 || Math.min(seg.sourceStart, seg.sourceEnd) < -0.02) add("SOURCE TIME", "error", `Shot ${k}: Segment ${n + 1} (${seg.sourceStart}–${seg.sourceEnd} s) liegt außerhalb von ${s.sourceClip} (${r3(cd)} s).`);
+    }
+    // reverse
+    const rev = typeof g.spec !== "number" && g.spec.some(w => w.from < 0 || w.to < 0);
+    if (Array.isArray(g.spec)) for (const msg of tweenIssues(g.spec, s.duration)) add(rev ? "REVERSE" : "SOURCE TIME", "error", `Shot ${k}: ${msg}`);
+    if ((s.playback?.direction || "forward") !== "forward" && !rev) add("REVERSE", "error", `Shot ${k}: playback ${s.playback.direction}, aber builder.speed enthält keine negative Speed.`);
+    if (rev && typeof g.spec === "number") add("REVERSE", "error", `Shot ${k}: Reverse braucht ein Speed-Tween-Array; eine konstante Speed muss laut Schema ≥ 0 sein.`);
+    if (rev) {
+      const segs = s.segments || [];
+      if (segs.length > 1) {
+        segs.forEach((seg, n) => { const want = seg.sourceEnd >= seg.sourceStart ? "forward" : "reverse"; if (seg.direction && seg.direction !== want) add("REVERSE", "error", `Shot ${k}: Segment ${n + 1} heißt „${seg.direction}“, läuft aber ${want}.`); if (n && Math.abs(seg.sourceStart - segs[n - 1].sourceEnd) > EPS) add("REVERSE", "error", `Shot ${k}: Segment ${n + 1} beginnt nicht dort, wo Segment ${n} endet.`); });
+        const zero = g.spec.some(w => (w.from > 0 && w.to <= 0) || (w.from >= 0 && w.to < 0) || (w.from < 0 && w.to >= 0) || (w.from <= 0 && w.to > 0));
+        if (!zero) add("REVERSE", "error", `Shot ${k}: Richtungswechsel ohne Nulldurchgang im Tween (harter Sprung).`);
+        const ramps = g.spec.filter(w => w.from === 0 || w.to === 0).reduce((t, w) => t + w.length, 0);
+        if (s.turnaround?.enabled && Math.abs(ramps - s.turnaround.duration) > 0.04) add("REVERSE", "error", `Shot ${k}: Turnaround laut Plan ${s.turnaround.duration} s, die Tweens rampen ${r4(ramps)} s.`);
+        const turnPos = simulate(g.trim0, g.spec, s.duration);
+        if (Math.abs(turnPos.hi - Math.max(...segs.map(x => Math.max(x.sourceStart, x.sourceEnd)))) > 0.04) add("REVERSE", "error", `Shot ${k}: Umkehrpunkt ${r4(turnPos.hi)} s, die Segmente nennen ${Math.max(...segs.map(x => Math.max(x.sourceStart, x.sourceEnd)))} s.`);
+      } else if (Math.abs(g.trim0 - s.sourceStart) > EPS) add("REVERSE", "error", `Shot ${k}: Reverse startet bei trim ${g.trim0}, sourceStart ist ${s.sourceStart}.`);
+      if (!G.REVERSE.some(x => x.level === "error" && x.msg.startsWith(`Shot ${k}:`))) add("REVERSE", "ok", `Shot ${k}: ${s.playback?.direction} · Source ${r4(vis.lo)}–${r4(vis.hi)} s · Ende ${r4(vis.end)} s · ${g.spec.length} Tweens${s.turnaround?.enabled ? ` · Turnaround ${s.turnaround.duration} s` : ""}.`);
+    }
+  });
+  if (!G["SOURCE TIME"].some(x => x.level === "error") && Object.keys(durations).length) add("SOURCE TIME", "ok", "Alle Shots bleiben in ihren Clips und in ihrer sourceRange (inklusive Handles).");
+  if (!G.TRANSITIONS.some(x => x.level === "error")) add("TRANSITIONS", "ok", `${sorted.filter(s => s.transitionOut === "crossfade").length} Crossfade, ${sorted.filter(s => s.transitionOut === "dip-to-black").length} Dip-to-black, sonst Hard Cuts; Fades über Opacity mit der Plan-Dauer.`);
+  if (!G.REVERSE.length) add("REVERSE", "ok", "Keine Reverse-Shots im Plan.");
+  return finish(G);
+}
+const finish = G => ({ groups: G, errors: Object.values(G).flat().filter(x => x.level === "error"), warnings: Object.values(G).flat().filter(x => x.level === "warn") });
+
+// stable JSON (sorted keys) for the job hash: same plan + same assets + same settings = same hash
+const canonical = v => Array.isArray(v) ? `[${v.map(canonical).join(",")}]` : v && typeof v === "object" ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}` : JSON.stringify(v);
+// ===== CORE-END =====
+</script>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const fx = (x, d = 2) => (x == null || !isFinite(+x)) ? "–" : (+x).toFixed(d);
+  const mb = b => `${(b / 1048576).toFixed(1)} MB`;
+  const fmtDate = iso => { try { return new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }); } catch { return iso || "–"; } };
+  const log = (msg, cls) => { const el = $("log"); if (!el.dataset.used) { el.textContent = ""; el.dataset.used = "1"; } const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = `${new Date().toLocaleTimeString("de-DE")}  ${msg}`; el.appendChild(d); el.scrollTop = el.scrollHeight; };
+  const SETTINGS = { resolution: "1080", fps: 25, environment: "stage", builder: BUILDER_VERSION };
+  const CHUNK = 160 * 1024;
+  const S = { db: null, downloads: null, clips: [], musicFiles: [], musicManual: null, planRaw: null, plan: null, planErrors: [], durations: {}, stage: [], uploads: [], jobs: [], busy: false, edit: null, hash: null };
+
+  // ---------- local files ----------
+  // duration from the MP4/MOV header (moov > mvhd), used when the browser cannot decode the codec
+  async function mp4Duration(file) {
+    const u32 = (v, o) => v.getUint32(o), box = async (off, n) => new DataView(await file.slice(off, off + n).arrayBuffer());
+    let off = 0;
+    while (off + 8 <= file.size) {
+      const h = await box(off, 16); let size = u32(h, 0); const type = String.fromCharCode(h.getUint8(4), h.getUint8(5), h.getUint8(6), h.getUint8(7));
+      if (size === 1) size = Number(h.getBigUint64(8)); else if (size === 0) size = file.size - off;
+      if (size < 8) return null;
+      if (type === "moov") {
+        const v = new DataView(await file.slice(off + 8, off + Math.min(size, 1 << 20)).arrayBuffer());
+        for (let i = 0; i + 8 <= v.byteLength;) { const n = u32(v, i), t = String.fromCharCode(v.getUint8(i + 4), v.getUint8(i + 5), v.getUint8(i + 6), v.getUint8(i + 7));
+          if (t === "mvhd") { const ver = v.getUint8(i + 8); return ver === 1 ? Number(v.getBigUint64(i + 32)) / u32(v, i + 28) : u32(v, i + 24) / u32(v, i + 20); }
+          if (n < 8) break; i += n; }
+        return null;
+      }
+      off += size;
+    }
+    return null;
+  }
+  const probeEl = (file, kind) => new Promise(res => { const el = document.createElement(kind); el.preload = "metadata"; const url = URL.createObjectURL(file); el.onloadedmetadata = () => { res(isFinite(el.duration) ? el.duration : null); URL.revokeObjectURL(url); }; el.onerror = () => { res(null); URL.revokeObjectURL(url); }; el.src = url; });
+  const probe = async (file, kind) => (await probeEl(file, kind)) ?? (kind === "video" ? await mp4Duration(file).catch(() => null) : null);
+  async function addClips(files) {
+    for (const f of files) { if (!/\.(mp4|mov)$/i.test(f.name) && !/^video\//.test(f.type)) { log(`${f.name}: kein Video.`, "warn"); continue; } S.clips = S.clips.filter(x => !(x.name === f.name && x.size === f.size)); S.clips.push(f); S.durations[f.name] = await probe(f, "video"); }
+    render();
+  }
+  async function addMusic(files) { const f = files[0]; if (!f) return; S.musicFiles = [f]; S.musicManual = null; S.durations[f.name] = await probe(f, "audio"); render(); }
+  function loadPlan(text, name) { try { const r = readPlan(JSON.parse(text)); S.plan = r.plan; S.planErrors = r.errors; S.planName = name; } catch (e) { S.plan = null; S.planErrors = [`Kein gültiges JSON (${e.message}).`]; } render(); }
+  const wire = (kind, handler, isText) => {
+    const drop = $("drop-" + kind), inp = $("file-" + kind);
+    const take = files => { if (isText) { const f = files[0]; if (!f) return; const r = new FileReader(); r.onload = () => handler(String(r.result), f.name); r.readAsText(f); } else handler([...files]); };
+    drop.addEventListener("click", () => inp.click()); drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inp.click(); } });
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); }); drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); take(e.dataTransfer.files); });
+    inp.addEventListener("change", () => { take(inp.files); inp.value = ""; });
+  };
+  wire("clips", addClips); wire("music", addMusic); wire("plan", loadPlan, true);
+  document.addEventListener("change", e => { if (e.target.id === "music-manual") { S.musicManual = e.target.checked; render(); } });
+
+  // ---------- derived state ----------
+  function musicMatch() {
+    const f = S.musicFiles[0]; if (!f || !S.plan) return { file: null };
+    if (f.name === S.plan.music.filename) return { file: f, how: "exact" };
+    return S.musicManual ? { file: f, how: "manual" } : { file: null, candidate: f };
+  }
+  function state() {
+    if (!S.plan) return null;
+    const clipMatch = matchClips(S.plan, S.clips), music = musicMatch();
+    const val = validate({ plan: S.plan, clipMatch, music, durations: S.durations, stage: S.stage, settings: SETTINGS });
+    const need = [...clipMatch.rows.filter(r => r.file).map(r => ({ key: r.name, file: r.file, kind: "video" })), ...(music.file ? [{ key: "__music", file: music.file, kind: "audio" }] : [])];
+    const assets = need.map(n => { const f = n.file, st = findStage(S.stage, { name: f.name, size: f.size, duration: S.durations[f.name] }), up = S.uploads.find(u => u.filename === f.name && u.size === f.size);
+      return { ...n, name: f.name, size: f.size, stage: st, upload: up, url: st?.url || (up?.status === "done" ? up.url : null) }; });
+    const urls = Object.fromEntries(assets.filter(a => a.url).map(a => [a.key, a.url]));
+    const built = buildEdit(S.plan, urls, SETTINGS), allUrls = assets.length && assets.every(a => a.url) && clipMatch.rows.every(r => r.file) && music.file;
+    return { clipMatch, music, val, assets, urls, built, allUrls };
+  }
+
+  // ---------- stage upload: the page stores the files; saying "sync" in the chat ingests them to Shotstack stage ----------
+  const b64 = buf => { let s = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+  $("btn-upload").addEventListener("click", async () => {
+    const st = state(); if (!st || S.busy || !S.db) return;
+    const todo = st.assets.filter(a => !a.url && !(a.upload && a.upload.status !== "failed"));
+    if (!todo.length) { log("Alle benötigten Assets sind auf Stage vorhanden; nichts hochzuladen."); return; }
+    S.busy = true; render();
+    try {
+      for (const a of todo) {
+        const id = "up" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), n = Math.ceil(a.file.size / CHUNK);
+        const doc = { filename: a.name, size: a.file.size, type: a.file.type || "", kind: a.kind, duration: S.durations[a.name] ?? null, chunks: n, createdAt: new Date().toISOString(), status: "storing" };
+        await S.db.collection("uploads").doc(id).set(doc);
+        for (let i = 0; i < n; i++) await S.db.collection("uploadChunks").doc(`${id}_${String(i).padStart(3, "0")}`).set({ uploadId: id, i, data: b64(await a.file.slice(i * CHUNK, (i + 1) * CHUNK).arrayBuffer()) });
+        await S.db.collection("uploads").doc(id).set({ ...doc, status: "pending" });
+        log(`${a.name}: gespeichert (${n} Teile), wartet auf Stage-Ingest.`, "ok");
+      }
+      log("Sag jetzt im Chat „sync“: dann werden die Dateien über die Shotstack Ingest API (stage) hochgeladen.", "ok");
+    } catch (e) { log(`Speichern fehlgeschlagen (${e?.code || e?.message || e}).`, "bad"); }
+    finally { S.busy = false; render(); }
+  });
+
+  // ---------- render request: one job per hash; the chat command "render" submits exactly this edit to Shotstack stage ----------
+  async function sha256(text) { const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)); return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, "0")).join(""); }
+  async function jobPayload(st) { const payload = canonical({ edit: st.built.edit, assets: st.assets.map(a => ({ key: a.key, filename: a.name, url: a.url })), settings: SETTINGS, plan: { createdAt: S.plan.meta.createdAt, duration: S.plan.timeline.duration, shots: S.plan.shots.length } }); return { payload, hash: await sha256(payload) }; }
+  const ACTIVE = new Set(["requested", "submitting", "queued", "fetching", "rendering", "saving"]);
+  $("btn-render").addEventListener("click", async () => {
+    const st = state(); if (!st || st.val.errors.length || !st.allUrls || !S.db) return;
+    const { payload, hash } = await jobPayload(st), same = S.jobs.filter(j => j.hash === hash);
+    if (same.some(j => ACTIVE.has(j.status) || j.status === "done")) { log("Dieser Job läuft bereits oder ist fertig; kein zweiter identischer Render.", "warn"); return; }
+    const attempt = same.length + 1, id = `${hash.slice(0, 24)}-${attempt}`;
+    const rev = S.plan.shots.filter(s => (s.playback?.direction || "forward") !== "forward").map(s => s.shotNumber);
+    await S.db.collection("renderJobs").doc(id).set({ hash, attempt, status: "requested", requestedAt: new Date().toISOString(), payload, environment: "stage", planDuration: S.plan.timeline.duration, shotCount: S.plan.shots.length, reverseShots: rev, planCreatedAt: S.plan.meta.createdAt, history: [{ status: "requested", at: new Date().toISOString() }] });
+    log(`Render angefordert (Job ${id}). Sag im Chat „render“: dann wird genau dieses Edit bei Shotstack Stage eingereicht.`, "ok");
+  });
+
+  // ---------- copy / download ----------
+  const note = (msg, cls) => { const n = $("json-note"); n.hidden = !msg; n.textContent = msg || ""; n.className = "small " + (cls || "muted"); };
+  $("btn-copy").addEventListener("click", async () => { if (!S.edit) return; const t = JSON.stringify(S.edit, null, 2), fb = $("json-fallback");
+    try { await navigator.clipboard.writeText(t); fb.hidden = true; note(`Shotstack JSON kopiert (${Math.round(t.length / 1024)} KB).`, "ok"); } catch { fb.hidden = false; fb.value = t; fb.focus(); fb.select(); note("Zwischenablage gesperrt; das JSON steht unten markiert.", "warn"); } });
+  $("btn-dl").addEventListener("click", async () => { if (!S.edit || !S.downloads) return;
+    try { await S.downloads.save({ filename: `shotstack-edit-${(S.hash || "draft").slice(0, 10)}.json`, data: JSON.stringify(S.edit, null, 2) }); note("JSON gespeichert.", "ok"); } catch (e) { note(e?.code === "declined" ? "Download abgebrochen." : `Download nicht möglich (${e?.code || e}).`, "warn"); } });
+
+  // ---------- render ----------
+  const tag = (s, cls) => `<span class="tag ${cls}">${esc(s)}</span>`;
+  function renderClips(st) {
+    if (!S.clips.length) { $("clips-info").innerHTML = `<p class="small muted">Noch keine Clips.</p>`; return; }
+    const req = st ? new Set(st.clipMatch.rows.filter(r => r.file).map(r => r.file)) : new Set();
+    $("clips-info").innerHTML = `<div class="tablebox"><table><thead><tr><th>Datei</th><th>Dauer</th><th>Größe</th><th>Status</th></tr></thead><tbody>${S.clips.map(f => `<tr><td>${esc(f.name)}</td><td class="n">${fx(S.durations[f.name])} s</td><td class="n">${mb(f.size)}</td><td>${!st ? tag("geladen", "muted") : req.has(f) ? tag("matched", "ok") : tag("unused", "muted")}</td></tr>`).join("")}</tbody></table></div>`;
+  }
+  function renderMusic(st) {
+    const f = S.musicFiles[0]; if (!f) { $("music-info").innerHTML = `<p class="small muted">Noch keine Musik.</p>`; return; }
+    const m = st?.music;
+    $("music-info").innerHTML = `<div class="kv"><span class="muted">Datei</span><span>${esc(f.name)}</span><span class="muted">Dauer · Größe</span><span class="mono">${fx(S.durations[f.name], 3)} s · ${mb(f.size)}</span><span class="muted">Zuordnung</span><span>${!S.plan ? tag("Plan fehlt", "muted") : m.file ? tag(m.how === "manual" ? "manuell matched" : "matched", m.how === "manual" ? "warn" : "ok") : tag("unmatched", "bad")}</span></div>
+      ${S.plan && !m.file && m.candidate ? `<label class="small"><input type="checkbox" id="music-manual"> Diese Datei als „${esc(S.plan.music.filename)}“ verwenden (manueller Match)</label>` : ""}${S.plan && m.how === "manual" ? `<label class="small"><input type="checkbox" id="music-manual" checked> manueller Match aktiv</label>` : ""}`;
+  }
+  function renderPlan() {
+    if (!S.plan) { $("plan-info").innerHTML = S.planErrors.length ? `<p class="bad small">✕ ${esc(S.planErrors.join(" "))}</p>` : `<p class="small muted">Noch kein Plan.</p>`; return; }
+    const p = S.plan, rev = p.shots.filter(s => (s.playback?.direction || "forward") !== "forward"), tr = p.shots.filter(s => !["hard-cut", "none"].includes(s.transitionOut) || !["hard-cut", "none"].includes(s.transitionIn));
+    $("plan-info").innerHTML = `<div class="facts"><div class="fact"><span class="label">Status</span><span class="v t">${esc(p.meta.statusLabel || p.meta.status || "–")}</span></div><div class="fact"><span class="label">Style</span><span class="v t">${esc(p.style?.label || "–")}</span></div><div class="fact"><span class="label">Dauer</span><span class="v">${fx(p.timeline.duration)} s</span></div><div class="fact"><span class="label">Shots</span><span class="v">${p.shots.length}</span></div></div>
+      <div class="kv small"><span class="muted">Musik</span><span>${esc(p.music.filename)} · Track ${fx(p.music.used.trackStart, 3)} → ${fx(p.music.used.trackEnd, 3)} s</span><span class="muted">Clips</span><span class="mono">${esc(requiredClips(p).join(", "))}</span><span class="muted">Reverse</span><span>${rev.length ? rev.map(s => `Shot ${s.shotNumber} (${esc(s.playback.direction)})`).join(", ") : "keine"}</span><span class="muted">Übergänge</span><span>${tr.length ? tr.map(s => `Shot ${s.shotNumber}: ${esc(s.transitionIn)} → ${esc(s.transitionOut)}`).join("<br>") : "nur Hard Cuts"}</span></div>`;
+  }
+  function renderMatch(st) {
+    if (!st) { $("match").innerHTML = `<p class="small muted">Erst einen Plan laden.</p>`; return; }
+    const rows = [...st.clipMatch.rows.map(r => `<tr><td>${esc(r.name)}</td><td>${tag(r.status, r.status === "MATCHED" ? "ok" : "bad")}${r.how === "case-insensitive" ? " " + tag("Groß/klein", "warn") : ""}</td><td>${r.file ? esc(r.file.name) : "–"}</td></tr>`),
+      ...st.clipMatch.unused.map(u => `<tr><td class="muted">–</td><td>${tag("UNUSED", "muted")}</td><td>${esc(u.name)}</td></tr>`),
+      `<tr><td>${esc(S.plan.music.filename)}</td><td>${tag(st.music.file ? (st.music.how === "manual" ? "MATCHED (manuell)" : "MATCHED") : "MISSING", st.music.file ? "ok" : "bad")}</td><td>${st.music.file ? esc(st.music.file.name) : "–"}</td></tr>`];
+    $("match").innerHTML = `<div class="tablebox"><table><thead><tr><th>Plan braucht</th><th>Status</th><th>Hochgeladene Datei</th></tr></thead><tbody>${rows.join("")}</tbody></table></div><p class="small muted">Zuordnung über <span class="mono">sourceClip</span> und <span class="mono">music.filename</span>. Ungenutzte Uploads werden ignoriert, fehlende blockieren den Render.</p>`;
+  }
+  function renderValidation(st) {
+    if (!st) { $("validation").innerHTML = ""; $("val-state").textContent = ""; return; }
+    const { groups, errors, warnings } = st.val;
+    $("val-state").className = "small " + (errors.length ? "bad" : "ok"); $("val-state").textContent = errors.length ? `${errors.length} Fehler · Render gesperrt` : `bestanden${warnings.length ? ` · ${warnings.length} Hinweise` : ""}`;
+    $("validation").innerHTML = `<div class="checks">${Object.entries(groups).map(([g, items]) => `<div class="group"><span>${tag(g, items.some(x => x.level === "error") ? "bad" : items.some(x => x.level === "warn") ? "warn" : "ok")}</span><ul>${items.map(x => `<li class="${x.level === "error" ? "bad" : x.level === "warn" ? "warn" : ""}">${esc(x.msg)}</li>`).join("") || `<li class="muted">–</li>`}</ul></div>`).join("")}</div>`;
+  }
+  function renderAssets(st) {
+    if (!st) { $("assets").innerHTML = ""; return; }
+    const label = a => a.stage ? tag("auf Stage · Wiederverwendung", "ok") : a.upload ? tag({ storing: "wird gespeichert", pending: "gespeichert · im Chat „sync“", ingesting: "Ingest läuft", done: "hochgeladen", failed: "fehlgeschlagen" }[a.upload.status] || a.upload.status, a.upload.status === "done" ? "ok" : a.upload.status === "failed" ? "bad" : "warn") : tag("nicht auf Stage", "warn");
+    $("assets").innerHTML = `<div class="tablebox"><table><thead><tr><th>Datei</th><th>Status</th><th>Shotstack Source</th></tr></thead><tbody>${st.assets.map(a => `<tr><td>${esc(a.name)}${a.key === "__music" ? ` <span class="muted small">(Musik)</span>` : ""}</td><td>${label(a)}${a.upload?.error ? `<br><span class="small bad">${esc(a.upload.error)}</span>` : ""}</td><td class="n">${a.url ? `${esc((a.stage?.id || a.upload?.sourceId || "").slice(0, 18))} · <a href="${esc(a.url)}" target="_blank" rel="noopener">Quelle</a>` : "–"}</td></tr>`).join("")}</tbody></table></div>
+      <p class="small muted">Nur Shotstack <b>Stage</b> (Ingest <span class="mono">api.shotstack.io/ingest/stage</span>). Dateien, die mit gleicher Größe und Dauer schon auf Stage liegen, werden wiederverwendet. Neue Dateien speichert die Seite; im Chat „sync“ sagen, dann lädt diese Session sie per Ingest API hoch und trägt die URL hier ein.</p>`;
+    $("btn-upload").disabled = S.busy || !S.db || st.val.errors.some(e => e.msg.startsWith("Missing")) || st.assets.every(a => a.url || (a.upload && a.upload.status !== "failed"));
+    $("btn-upload").textContent = st.assets.length && st.assets.every(a => a.url) ? "Alle Assets auf Stage" : "Upload Assets to Shotstack";
+  }
+  function renderTimeline(st) {
+    if (!st) { $("timeline").innerHTML = ""; return; }
+    const p = S.plan, shots = [...p.shots].sort((a, b) => a.shotNumber - b.shotNumber), D = p.timeline.duration, X0 = 10, X1 = 990, x = t => X0 + (t / D) * (X1 - X0), out = [];
+    for (let s = 0; s <= D + 1e-6; s += 1) out.push(`<line x1="${x(s)}" x2="${x(s)}" y1="76" y2="80" stroke="var(--beat)"/>${s % 5 === 0 ? `<text x="${x(s)}" y="92" text-anchor="middle">${s}s</text>` : ""}`);
+    shots.forEach(s => { const w = x(s.timelineEnd) - x(s.timelineStart), rev = (s.playback?.direction || "forward") !== "forward", micro = s.role === "micro-insert" || s.duration <= 1.1, hero = /hero|finale|opening/.test(s.role || "");
+      out.push(`<rect x="${x(s.timelineStart) + 0.5}" y="14" width="${Math.max(1, w - 1)}" height="52" rx="3" fill="var(${micro ? "--micro" : hero ? "--shot-hero" : "--shot"})"><title>${esc(`Shot ${s.shotNumber} · ${s.sourceClip} · ${s.timelineStart}–${s.timelineEnd} s`)}</title></rect>`);
+      if (rev) out.push(`<rect x="${x(s.timelineStart) + 0.5}" y="60" width="${Math.max(1, w - 1)}" height="6" fill="var(--rev)"/>`);
+      if (w > 16) out.push(`<text class="lbl ${hero && !micro ? "inv" : ""}" x="${x(s.timelineStart) + 4}" y="30">${s.shotNumber}</text>`);
+      if (w > 52) out.push(`<text class="lbl ${hero && !micro ? "inv" : ""}" x="${x(s.timelineStart) + 4}" y="46" style="font-weight:400;font-size:10px">${esc(String(s.roomType || s.sourceClip).slice(0, Math.floor(w / 6.4)))}</text>`);
+      if (s.transitionOut === "crossfade") out.push(`<rect x="${x(s.timelineEnd - s.transitionOutDuration / 2)}" y="8" width="${x(s.timelineEnd + s.transitionOutDuration / 2) - x(s.timelineEnd - s.transitionOutDuration / 2)}" height="64" fill="var(--accent)" opacity="0.25"/>`); });
+    const svg = `<svg viewBox="0 0 1000 100" role="img" aria-label="Timeline des Plans">${out.join("")}</svg>`;
+    $("timeline").innerHTML = `<div class="tlbox">${svg}</div><div class="small muted">Farben: dunkel Hero/Opening/Finale, hell sonstige Shots, gold Micro Inserts (≤ 1,1 s), violetter Balken Reverse, Fläche Crossfade.</div>
+      <div class="tablebox"><table><thead><tr><th>#</th><th>Datei</th><th>Raum</th><th>Start</th><th>Ende</th><th>Dauer</th><th>Richtung</th><th>Speed</th><th>Übergang</th></tr></thead><tbody>${shots.map(s => `<tr><td class="n">${s.shotNumber}</td><td>${esc(s.sourceClip)}${s.role === "micro-insert" ? " " + tag("micro", "warn") : ""}</td><td class="small">${esc(s.roomType)}</td><td class="n">${fx(s.timelineStart, 3)}</td><td class="n">${fx(s.timelineEnd, 3)}</td><td class="n">${fx(s.duration, 3)}</td><td>${(s.playback?.direction || "forward") === "forward" ? "forward" : tag(s.playback.direction, "")}</td><td class="n">${Array.isArray(s.builder?.speed) ? `Tween (${s.builder.speed.length})` : fx(s.playbackSpeed, 2) + "×"}</td><td class="small">${esc(s.transitionIn)} → ${esc(s.transitionOut)}${s.transitionOutDuration ? ` ${s.transitionOutDuration} s` : ""}</td></tr>`).join("")}</tbody></table></div>`;
+  }
+  function renderJson(st) {
+    if (!st) { $("json").innerHTML = ""; S.edit = null; return; }
+    S.edit = st.built.edit;
+    $("json").innerHTML = `${st.allUrls ? "" : `<p class="notice">Vorschau mit Platzhaltern (<span class="mono">pending://…</span>) für Assets, die noch keine Stage-URL haben. Gerendert wird nur mit echten URLs.</p>`}${st.built.notes.length ? `<p class="notice">${st.built.notes.map(esc).join("<br>")}</p>` : ""}
+      <p class="small muted">Builder ${esc(BUILDER_VERSION)} · deterministisch: gleicher Plan + gleiche Assets + gleiche Settings = gleiches JSON. ${S.hash ? `Job-Hash <span class="mono">${S.hash.slice(0, 16)}…</span>` : ""}</p><pre>${esc(JSON.stringify(st.built.edit, null, 2))}</pre>`;
+    $("btn-copy").disabled = false; $("btn-dl").disabled = !S.downloads;
+  }
+  const STEPS = ["requested", "submitting", "queued", "fetching", "rendering", "saving", "done"];
+  function renderRender(st) {
+    const jobs = S.hash ? S.jobs.filter(j => j.hash === S.hash).sort((a, b) => b.attempt - a.attempt) : [], job = jobs[0];
+    const anyRevDone = S.jobs.some(j => j.status === "done" && (j.reverseShots || []).length);
+    $("reverse-status").innerHTML = `<div class="banner ${anyRevDone ? "ok" : "warn"}"><b>Reverse Status: ${anyRevDone ? "Reverse render technically successful" : "Reverse not yet verified"}</b><span class="small">${anyRevDone ? "Shotstack hat einen Render mit negativer Speed ohne Fehler abgeschlossen. Ob der Reverse gut aussieht, ist damit nicht beurteilt." : "Noch kein erfolgreicher Stage-Render mit Reverse-Shot. Laut Shotstack-Doku spielt eine negative Speed in einem Speed-Tween rückwärts; bestätigt ist das erst nach einem Render."}</span></div>`;
+    const blocked = !st || st.val.errors.length > 0 || !st.allUrls;
+    const running = job && (ACTIVE.has(job.status) || job.status === "done");
+    $("btn-render").disabled = blocked || !!running || !S.db;
+    $("btn-render").textContent = job?.status === "failed" ? "Render Stage Video (neuer Versuch)" : "Render Stage Video";
+    if (!st) { $("render").innerHTML = ""; return; }
+    const why = st.val.errors.length ? `Gesperrt: ${st.val.errors.length} Validierungsfehler.` : !st.allUrls ? "Gesperrt: nicht alle Assets haben eine Stage-URL." : running ? "Dieser Job ist bereits angefordert, läuft oder ist fertig; kein zweiter identischer Render." : "Bereit. Der Klick legt einen Render-Auftrag an; eingereicht wird er erst, wenn du im Chat „render“ sagst.";
+    const idx = job ? STEPS.indexOf(job.status) : -1;
+    const steps = `<div class="steps">${["BUILDING EDIT", ...STEPS.map(s => s.toUpperCase())].map((s, i) => `<span class="${job?.status === "failed" && i === idx + 1 ? "fail" : i === 0 || job?.status === "done" || i - 1 < idx ? "done" : i - 1 === idx ? "now" : ""}">${s}</span>`).join("")}${job?.status === "failed" ? `<span class="fail">FAILED</span>` : ""}</div>`;
+    const res = job?.status === "done" ? (() => { const diff = job.actualDuration != null ? job.actualDuration - job.planDuration : null, bad = diff != null && Math.abs(diff) > 2 / SETTINGS.fps;
+      return `${job.playbackUrl ? `<video src="${esc(job.playbackUrl)}" controls playsinline preload="metadata"></video>` : `<p class="notice info">Der Player braucht eine Kopie im Artifact-Speicher (externe Medien-URLs blockiert die Seite). Bis dahin: „Open Video“.</p>`}
+        <div class="kv"><span class="muted">Render ID</span><span class="mono">${esc(job.renderId)}</span><span class="muted">Status</span><span>${esc(job.status)} · ${esc(job.environment)}</span><span class="muted">Renderzeit</span><span>${job.renderTime != null ? `${fx(job.renderTime / 1000, 1)} s` : "–"}</span>
+        <span class="muted">Output</span><span><a href="${esc(job.url)}" target="_blank" rel="noopener">Open Video</a> · <a href="${esc(job.url)}" target="_blank" rel="noopener" download>Download Video</a></span>
+        <span class="muted">Plan-Dauer</span><span class="mono">${fx(job.planDuration, 3)} s</span><span class="muted">Render-Dauer</span><span class="mono">${fx(job.actualDuration, 3)} s ${job.durationSource ? `<span class="muted">(${esc(job.durationSource)})</span>` : ""}</span>
+        <span class="muted">Differenz</span><span class="mono ${bad ? "warn" : "ok"}">${diff == null ? "–" : `${diff >= 0 ? "+" : ""}${fx(diff, 3)} s (${fx(diff * SETTINGS.fps, 1)} Frames)`}${bad ? " · mehr als 2 Frames" : ""}</span></div>`; })()
+      : job?.status === "failed" ? `<p class="bad">${esc(job.error || "Render fehlgeschlagen.")}</p><p class="small muted">Kein automatischer Neuversuch. Ein neuer Versuch startet nur über den Button und dein „render“ im Chat.</p>` : "";
+    $("render").innerHTML = `<p class="small ${blocked ? "warn" : "muted"}">${esc(why)}</p>${steps}${job ? `<p class="small muted">Job <span class="mono">${esc(job.id)}</span> · angefordert ${fmtDate(job.requestedAt)}${job.renderId ? ` · Render ${esc(job.renderId)}` : ""}</p>` : ""}${res}
+      ${S.jobs.length ? `<details><summary>Alle Render-Jobs (${S.jobs.length})</summary><ul class="small">${S.jobs.map(j => `<li class="mono">${esc(j.id)} · ${esc(j.status)} · ${fmtDate(j.requestedAt)}${j.error ? ` · ${esc(j.error)}` : ""}</li>`).join("")}</ul></details>` : ""}`;
+  }
+  function renderDebug(st) {
+    if (!st) { $("debug").innerHTML = ""; return; }
+    const shots = [...S.plan.shots].sort((a, b) => a.shotNumber - b.shotNumber);
+    $("debug").innerHTML = `<details open><summary>Asset Map</summary><ul class="small mono">${st.assets.map(a => `<li>${esc(a.key === "__music" ? `MUSIC ${a.name}` : a.name)} → ${a.url ? esc(a.url) : "noch keine Stage-URL"}</li>`).join("")}</ul></details>
+      <details open><summary>Shot Map</summary><ul class="small">${st.built.shotMap.map((m, i) => { const s = shots[i], rev = Array.isArray(m.speed) && m.speed.some(w => w.from < 0 || w.to < 0);
+        return `<li><b>Shot ${m.shot}</b> → ${esc(m.source)} · trim ${m.trim} · Clip ${m.clipStart}–${r4(m.clipStart + m.clipLength)} s (sichtbar ${m.visible.join("–")} s${m.lead || m.tail ? `, Handles ${m.lead}/${m.tail} s` : ""}) · Track-Ebene ${m.level} · Source ${r4(m.sim.lo)}–${r4(m.sim.hi)} s, Ende ${r4(m.sim.end)} s${rev ? `<br><span class="small">Source Range ${esc(JSON.stringify(s.sourceRange))} · Segmente ${esc((s.segments || []).map(g => `${g.direction} ${g.sourceStart}→${g.sourceEnd} @${g.speed}`).join(" | ") || `${s.playback.direction} ${s.sourceStart}→${s.sourceEnd}`)}${s.turnaround ? ` · Turnaround ${esc(s.turnaround.type)} ${s.turnaround.duration} s` : ""}<br>Speed Tween <span class="mono">${esc(JSON.stringify(m.speed))}</span></span>` : ""}</li>`; }).join("")}</ul></details>
+      <details><summary>Settings</summary><pre>${esc(JSON.stringify(SETTINGS, null, 2))}</pre></details>`;
+  }
+  async function render() {
+    const st = state();
+    renderClips(st); renderMusic(st); renderPlan(); renderMatch(st); renderValidation(st); renderAssets(st); renderTimeline(st);
+    if (st && st.allUrls && !st.val.errors.length) { const { hash } = await jobPayload(st); S.hash = hash; } else S.hash = null;
+    renderJson(st); renderRender(st); renderDebug(st);
+  }
+
+  // ---------- boot ----------
+  async function boot() {
+    render();
+    const use = n => (window.claude?.use ? window.claude.use(n).catch(() => null) : Promise.resolve(null));
+    [S.db, S.downloads] = await Promise.all([use("db"), use("downloads")]);
+    const chip = (id, ok, label) => { const el = $(id); el.className = "chip " + (ok ? "on" : "off"); el.lastChild.textContent = label; };
+    chip("cap-db", !!S.db, S.db ? "Speicher" : "Speicher fehlt"); chip("cap-dl", !!S.downloads, S.downloads ? "Download" : "Download fehlt");
+    if (!S.db) { $("nocaps").hidden = false; $("nocaps").textContent = "Ohne Speicher kann die Seite weder Stage-Assets lesen noch Render-Aufträge anlegen. Öffne sie in claude.ai."; }
+    if (S.db) {
+      S.db.collection("stageAssets").onSnapshot(qs => { S.stage = qs.docs.map(d => ({ id: d.id, ...d.data() })); render(); });
+      S.db.collection("uploads").onSnapshot(qs => { S.uploads = qs.docs.map(d => ({ id: d.id, ...d.data() })); render(); });
+      S.db.collection("renderJobs").onSnapshot(qs => { const before = Object.fromEntries(S.jobs.map(j => [j.id, j.status])); S.jobs = qs.docs.map(d => ({ id: d.id, ...d.data() }));
+        for (const j of S.jobs) if (before[j.id] && before[j.id] !== j.status) log(`Job ${j.id}: ${before[j.id]} → ${j.status}${j.error ? ` (${j.error})` : ""}`, j.status === "failed" ? "bad" : j.status === "done" ? "ok" : ""); render(); });
+    }
+    render();
+  }
+  boot();
+})();
+</script>

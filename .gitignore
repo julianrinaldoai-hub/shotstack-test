@@ -5,3 +5,6 @@ edit-plan-b.stage.json
 edit-plan-c.stage.json
 edit-plan-d.stage.json
 director-assets.local.json
+# Render Testcenter job ledger: render ids and output URLs; keep local only
+render-jobs.local.json
+render-jobs.local.json.tmp
