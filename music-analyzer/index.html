@@ -59,6 +59,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
 .notice { border-left: 3px solid var(--warn); padding: 8px 12px; background: var(--soft); border-radius: 0 8px 8px 0; font-size: 0.9rem; }
 .log { font-family: var(--f-mono); font-size: 0.74rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 150px; overflow: auto; white-space: pre-wrap; }
 .log .ok { color: var(--ok); } .log .warn { color: var(--warn); } .log .bad { color: var(--bad); }
+#export-note.ok { color: var(--ok); } #export-note.warn { color: var(--warn); }
 .tracks { display: grid; gap: 6px; }
 .track { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
 .track:has(input:checked) { border-color: var(--accent); background: var(--soft); }
@@ -166,10 +167,14 @@ details summary { cursor: pointer; font-weight: 600; }
         <button class="primary" id="btn-analyze">Analyze Music</button>
         <button id="btn-reanalyze">Re-analyze</button>
         <button class="danger" id="btn-clear">Clear analysis</button>
+        <button id="btn-export" disabled>Export JSON</button>
+        <button id="btn-copy" disabled>Copy JSON</button>
       </div>
     </div>
     <p class="small muted">Shotstack <span class="mono">analyse_music</span> ist kostenlos. Danach deutet Claude die Messwerte (Struktur, Key Moments), und der Code prüft jede Deutung gegen die Messwerte. Es wird nichts geschnitten oder gerendert.</p>
     <div class="log" id="log" aria-live="polite">Bereit.</div>
+    <p class="small muted" id="export-note" hidden></p>
+    <textarea id="export-fallback" rows="8" style="width:100%;margin-top:8px;font:12px ui-monospace,monospace;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:8px" aria-label="Export-JSON zum manuellen Kopieren" readonly hidden></textarea>
   </section>
 
   <div id="results"></div>
@@ -616,6 +621,111 @@ Write every free-text value in German. Return JSON only:
     </section>`;
   }
 
+  // ---------- export (read-only: uses the stored analysis and the unchanged functions above) ----------
+  const EXPORT_SCHEMA = "music-analysis-export@1", ARTIFACT_URL = "https://claude.ai/artifact/6gLoRK4wghPMDhxk9E1LnM";
+  const na = (note, substitute) => ({ available: false, value: null, note, ...(substitute ? { substitute } : {}) });
+  const candOut = (c, rank, a, notes) => {
+    const i = c.style === "neutral" ? (a.candidates?.neutral?.[c.length] || []).findIndex(x => x.start === c.start) : -1, nid = i >= 0 ? `${c.length}s-${"ABC"[i]}` : null;
+    return { id: `${c.style}-${c.length}s-${"ABC"[rank] || rank + 1}`, style: c.style, targetLength: c.length, rank: rank + 1, start: c.start, end: c.end, duration: r3(c.end - c.start),
+      continuous: true, score: c.score, scoreScale: "0-10", subScores: c.sub, reason: reason(c), reasonSource: "derived-code", facts: c.facts,
+      claudeNote: nid && notes[nid] ? notes[nid] : null, source: "derived-code" };
+  };
+  function buildExport() {
+    const t = track(), a = t ? S.analyses[t.id] : null;
+    if (!t || !a?.raw) return null;
+    const raw = a.raw, m = modelOf(raw), d = derive(m), it = a.interpretation || null, chk = it ? checkInterpretation(m, d, it) : null;
+    const prov = k => ({ grid: "shotstack-grid", shot: "shotstack", na: "unavailable" }[k]);
+    const notes = Object.fromEntries((it?.candidateNotes || []).map(n => [n.id, n.note]));
+    // all candidates: stored ones (4 styles × 23/25/27/30 s), plus the custom length currently set on the page
+    const lens = [...LENGTHS, ...(S.custom && !LENGTHS.includes(S.custom) ? [S.custom] : [])];
+    const byStyle = Object.fromEntries(STYLES.map(([st]) => [st, Object.fromEntries(lens.map(L => [L, a.candidates?.[st]?.[L] || candidates(m, d, L, st)]))]));
+    const candList = STYLES.flatMap(([st]) => lens.flatMap(L => byStyle[st][L].map((c, i) => candOut(c, i, a, notes))));
+    // selected section: the excerpt marked on the map ("Auf Karte zeigen"), else the best-scored one for the current style (suggestion)
+    const cur = Object.values(byStyle[S.style] || {}).flat(), picked = S.pick ? cur.find(c => `${c.length}-${c.start}` === S.pick) : null;
+    const top = LENGTHS.flatMap(L => (byStyle[S.style]?.[L] || []).slice(0, 1)).sort((x, y) => y.score - x.score)[0] || null, sel = picked || top;
+    const selOut = sel ? (() => { const rank = byStyle[sel.style][sel.length].findIndex(c => c.start === sel.start), co = candOut(sel, rank, a, notes);
+      return { selection: picked ? "marked-by-user" : "suggested-top-score", candidateId: co.id, style: sel.style, targetLength: sel.length,
+        usableStart: sel.start, usableEnd: sel.end, usableDuration: r3(sel.end - sel.start), continuous: true, internalCuts: 0, loops: 0, jumps: 0,
+        score: sel.score, subScores: sel.sub, reason: co.reason, claudeNote: co.claudeNote, source: "derived-code" }; })() : null;
+    // Claude's own evidence per key moment (checkInterpretation keeps the order after a stable sort by time)
+    const itMoments = [...(it?.keyMoments || [])].sort((x, y) => r3(+x.time) - r3(+y.time));
+    return {
+      meta: { schema: EXPORT_SCHEMA, exportedAt: new Date().toISOString(), source: { artifact: "Musik-Struktur", url: ARTIFACT_URL },
+        trackId: t.id, filename: t.filename, duration: m.duration, analysisVersion: a.analyzedAt || null, createdAt: a.analyzedAt || null,
+        interpretedAt: a.interpretedAt || null, shotstackJobId: a.shotstackId || null, shotstackFields: a.fields || Object.keys(raw),
+        interpretationAvailable: !!it, interpretationError: a.interpError || null,
+        provenance: { "shotstack": "measured by Shotstack analyse_music", "shotstack-grid": "computed exactly from Shotstack beat, bar and bars.start (steady tempo)",
+          "derived-code": "computed by the page code from Shotstack values", "claude-interpretation": "interpreted by Claude from the Shotstack values, checked by code", "unavailable": "not delivered by Shotstack, left empty" } },
+      track: { trackId: t.id, filename: t.filename, duration: m.duration, extension: t.extension || (t.filename.split(".").pop() || "").toLowerCase(), filesize: t.filesize ?? null,
+        uploadedAt: t.created || null, asset: { source: t.source || "shotstack-stage", url: t.url || a.url || null } },
+      technical: {
+        bpm: { value: m.bpm, source: "shotstack" }, steady: { value: m.steady, source: "shotstack" }, meter: m.meter != null ? { value: m.meter, source: "shotstack" } : na("only delivered with steady tempo"),
+        beatLength: m.beatLen != null ? { value: m.beatLen, unit: "s", source: raw.beat != null ? "shotstack" : "derived-code" } : na("no bpm"),
+        barLength: { value: m.barLen, unit: "s", source: raw.bar != null ? "shotstack" : "derived-code" },
+        beats: { source: prov(m.prov.beats), count: m.beats.length, times: m.beats },
+        downbeats: { source: prov(m.prov.downbeats), count: m.downbeats.length, times: m.downbeats, confidence: raw.downbeat?.confidence ?? null, offset: raw.downbeat?.offset ?? null },
+        bars: { source: m.steady ? "shotstack-grid" : "shotstack", grid: m.steady ? "bars.start + n × bar" : "downbeats[] from bars.start", gridStart: m.barsStart,
+          origin: m.origin, originNote: m.origin != null && m.barsStart != null && Math.abs(m.barsStart - m.origin) > 0.01 ? "origin differs from bars.start; the grid uses bars.start because Shotstack's section times match it" : null,
+          count: m.bars.length, shotstackBarsCount: raw.bars?.count ?? null,
+          countNote: raw.bars?.count != null && raw.bars.count !== m.bars.length ? "grid has fewer bars than Shotstack bars.count: the page builds it from downbeats[] and drops a downbeat less than 0.3 s after the previous one; energy is assigned by bar index as on the page; Shotstack bars and downbeats are unchanged in technical.raw" : null,
+          list: m.bars.map(b => ({ index: b.i, start: b.t, end: b.end, energy: b.e })) },
+        energy: { source: "shotstack", field: "bars.energy", resolution: "per bar", range: "0-1", perBar: m.bars.map(b => b.e),
+          stats: { median: d.median, p25: d.p25, p75: d.p75, source: "derived-code" } },
+        loudness: na("Shotstack delivers no fine loudness curve", "energy.perBar"),
+        sections: { source: "shotstack", list: m.sections.map(s => ({ time: s.time, bar: s.bar, change: s.change })) },
+        drops: { source: "shotstack", list: m.drops.map(x => ({ ...x })) },
+        onsets: na("not in the Shotstack result"),
+        strongBeats: na("Shotstack delivers no beat strength", "bars (bar starts) and energyJumps"),
+        peaks: { available: false, note: "Shotstack delivers no peaks or accents", substitute: { source: "derived-code", basis: "local maxima of bars.energy (>= max(0.9, p75))", list: d.peaks.map(p => ({ time: p.t, bar: p.bar, energy: p.e })) } },
+        energyJumps: { source: "derived-code", basis: "bars.energy change >= 0.25 between neighbouring bars", list: d.jumps.map(j => ({ time: j.t, bar: j.bar, delta: j.delta })) },
+        rhythmDensity: na("not in the Shotstack result"),
+        tempoChanges: na("Shotstack only reports steady true/false", "steady"),
+        silence: na("Shotstack delivers no silence detection", "lowEnergy"),
+        lowEnergy: { source: "derived-code", basis: "bars.energy <= min(0.3, p25)", list: d.low.map(r => ({ from: r.from, to: r.to, bar: r.bar, bars: r.n })) },
+        precision: raw.precision || null,
+        raw
+      },
+      structure: { source: "claude-interpretation", available: !!chk, summary: it?.summary ?? null, caveats: it?.caveats ?? null,
+        checks: chk ? chk.flags : [],
+        sections: (chk?.segments || []).map(s => ({ type: s.label, title: s.title ?? null, start: s.from, end: s.to, duration: r3(s.to - s.from), confidence: null,
+          basis: s.evidence ?? null, meanEnergy: s.meanEnergy, meanEnergySource: "derived-code", checkFlags: s.flags })) },
+      keyMoments: {
+        technical: [
+          ...m.sections.map(s => ({ timestamp: s.time, type: `section_${s.change}`, bar: s.bar, strength: null, source: "shotstack" })),
+          ...m.drops.map(x => ({ timestamp: x.time, type: "drop", bar: x.bar ?? null, strength: null, source: "shotstack" })),
+          ...d.jumps.map(j => ({ timestamp: j.t, type: j.delta > 0 ? "energy_rise" : "energy_fall", bar: j.bar, strength: j.delta, strengthBasis: "bars.energy delta", source: "derived-code" })),
+          ...d.peaks.map(p => ({ timestamp: p.t, type: "energy_peak", bar: p.bar, strength: p.e, strengthBasis: "bars.energy", source: "derived-code" }))
+        ].sort((x, y) => x.timestamp - y.timestamp),
+        interpreted: (chk?.moments || []).map((k, i) => ({ timestamp: k.time, type: k.type, note: k.note ?? null, strength: null, basis: itMoments[i]?.evidence ?? null,
+          verifiedBy: k.evidence, checkFlags: k.flags, source: "claude-interpretation" }))
+      },
+      selectedSection: selOut,
+      candidates: { source: "derived-code", currentStyle: S.style, lengths: lens, styles: STYLES.map(([st]) => st), perLengthAndStyle: 3, rule: "start on a bar start, end = start + length; no cuts, jumps or loops", list: candList }
+    };
+  }
+  const exportName = d => `music-analysis-${(d.meta.filename || d.meta.trackId).replace(/\.[a-z0-9]+$/i, "").normalize("NFKD").replace(/[^\w-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 60) || "track"}-${d.meta.exportedAt.slice(0, 10)}.json`;
+  const exportNote = (msg, cls) => { const el = $("export-note"); el.hidden = !msg; el.textContent = msg || ""; el.className = "small " + (cls || "muted"); };
+  async function initExport() {
+    const sync = () => { const t = track(), ok = !!(t && S.analyses[t.id]?.raw) && !S.busy; $("btn-export").disabled = !ok || !S.downloads; $("btn-copy").disabled = !ok;
+      $("btn-export").title = S.downloads ? "" : "Download ist in dieser Ansicht nicht verfügbar. „Copy JSON“ geht trotzdem."; };
+    new MutationObserver(sync).observe($("results"), { childList: true }); new MutationObserver(sync).observe($("btn-analyze"), { attributes: true });
+    sync();
+    S.downloads = window.claude?.use ? await window.claude.use("downloads").catch(() => null) : null; sync();
+    $("btn-export").addEventListener("click", async () => {
+      const d = buildExport(); if (!d || !S.downloads) return;
+      const filename = exportName(d);
+      try { const r = await S.downloads.save({ filename, data: JSON.stringify(d, null, 2) }); exportNote(r?.status === "delivered" ? `${filename} wurde übergeben.` : `${filename} gespeichert.`, "ok"); }
+      catch (e) { exportNote(e?.code === "declined" ? "Download abgebrochen." : `Download fehlgeschlagen (${e?.code || e?.message || e}). „Copy JSON“ geht trotzdem.`, e?.code === "declined" ? "muted" : "warn"); }
+    });
+    $("btn-copy").addEventListener("click", async () => {
+      const d = buildExport(); if (!d) return;
+      const text = JSON.stringify(d, null, 2), fb = $("export-fallback");
+      try { await navigator.clipboard.writeText(text); fb.hidden = true; exportNote(`JSON kopiert (${Math.round(text.length / 1024)} KB).`, "ok"); }
+      catch { fb.hidden = false; fb.value = text; fb.focus(); fb.select(); exportNote("Die Zwischenablage ist hier gesperrt. Das JSON steht unten markiert; mit Strg/Cmd + C kopieren.", "warn"); }
+    });
+  }
+
   boot();
+  initExport();
 })();
 </script>

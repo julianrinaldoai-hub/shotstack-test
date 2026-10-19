@@ -42,6 +42,31 @@ Der Code prüft jede Claude-Deutung gegen die Messwerte:
 - **Stile:** Neutral, Elegant, Dynamic und Cinematic ändern nur die Gewichtung der Teilwerte. Elegant bewertet zusätzlich einen ruhigen Fluss, Cinematic zusätzlich Release/Finale.
 - **Taktraster:** Pro Länge zeigt die Seite, ob sie genau auf einem Takt endet. Bei 120 BPM enden 23, 25 und 27 s immer einen halben Takt daneben.
 
+## Export
+
+- **Bedienung:**
+  - „Export JSON“ lädt den finalen Stand des gewählten Tracks als Datei herunter (`music-analysis-<track>-<datum>.json`).
+  - „Copy JSON“ kopiert dieselbe Struktur in die Zwischenablage.
+  - Beides geht, sobald eine Shotstack-Analyse vorliegt.
+- **Nur lesend:** Der Export liest die gespeicherte Analyse und nutzt die unveränderten Funktionen der Seite (`modelOf`, `derive`, `checkInterpretation`, gespeicherte Kandidaten). Es wird nichts neu analysiert oder ergänzt.
+- **Struktur** (`schema: music-analysis-export@1`):
+  - **`meta`:** trackId, filename, duration, analysisVersion (= Zeitpunkt der Shotstack-Analyse), createdAt, interpretedAt, Shotstack-Job-ID, Bedeutung der Quellen-Kennzeichnung
+  - **`track`:** Dateidaten und Asset-Referenz (Quelle, URL)
+  - **`technical`:** nur Messwerte und daraus berechnete Werte, jeweils mit `source`
+    - Shotstack: BPM, steady, meter, Beats, Downbeats, sections, drops, `bars.energy`, precision
+    - finales Taktraster `bars.list` (Index, Start, Ende, Energie), berechnet nach `bars.start + n × bar` bzw. aus `downbeats[]`
+    - Code: Energiesprünge, Energiespitzen, leise Bereiche
+    - Nicht geliefert, daher `available: false`, `value: null`: onsets, strongBeats, peaks, loudness, rhythmDensity, tempoChanges, silence
+    - `raw`: die unveränderten Shotstack-Rohdaten
+  - **`structure`:** Claudes Abschnitte (type, start, end, Begründung) mit der Prüfung durch den Code. `confidence` ist `null`, weil Claude keine liefert.
+  - **`keyMoments`:** getrennt in `technical` (Shotstack und Code) und `interpreted` (Claude, mit Beleg und Prüfhinweisen)
+  - **`selectedSection`:**
+    - der auf der Karte markierte Abschnitt (`selection: "marked-by-user"`)
+    - sonst der beste Kandidat des aktuellen Stils (`"suggested-top-score"`)
+    - Felder: usableStart, usableEnd, usableDuration; immer am Stück, ohne Schnitte, Loops oder Sprünge
+  - **`candidates`:** alle Kandidaten (4 Stile × 23/25/27/30 s × 3, dazu die eigene Länge) mit start, end, duration, score, Teilwerten, Begründung des Codes und Claudes Notiz
+- **Nicht enthalten:** Audio, Binärdaten und UI-Daten.
+
 ## Musik hochladen
 
 - **Warum über den Chat:** `analyse_music` braucht eine öffentliche URL. Die Seite selbst kann weder die Shotstack-Ingest-API erreichen, noch sind Dateien in ihrer Ablage öffentlich (geprüft: 403 ohne Anmeldung). Deshalb läuft der Upload in zwei Schritten.
