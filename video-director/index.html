@@ -1,0 +1,886 @@
+<title>Video Director</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:wght@400;600&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an edit-suite brief: the two finished analyses side by side, the style, then the plan as a cut sheet (summary, music-locked timeline, screen time per clip, shot list, checks) */
+:root {
+  --bg: #f0efec; --panel: #fbfaf8; --ink: #1c1b1a; --muted: #66615b; --line: #dbd6cf; --soft: #e7e3dd;
+  --accent: #2f5bd3; --accent-ink: #ffffff; --ok: #237a4b; --warn: #946200; --bad: #b42d23;
+  --energy: #8fa6e6; --beat: #aaa298; --down: #1c1b1a; --rise: #237a4b; --fall: #c0612b; --drop: #b42d23; --moment: #d4a21c;
+  --cA: #1f4fc4; --cB: #5b83e0; --cC: #b9a27a; --cD: #c9c2b8; --cE: #d9a39b; --cX: #cfc9c1;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "Martian Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #131312; --panel: #1b1a19; --ink: #ebe7e2; --muted: #a29b92; --line: #34312d; --soft: #25231f;
+  --accent: #86a6ff; --accent-ink: #131312; --ok: #5fc58c; --warn: #e0b04a; --bad: #f07a6e;
+  --energy: #3f5594; --beat: #5c564f; --down: #ebe7e2; --rise: #5fc58c; --fall: #f09a5f; --drop: #f07a6e; --moment: #e8c050;
+  --cA: #86a6ff; --cB: #5a78c4; --cC: #8a7754; --cD: #4a4540; --cE: #8a4f47; --cX: #403b35; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #131312; --panel: #1b1a19; --ink: #ebe7e2; --muted: #a29b92; --line: #34312d; --soft: #25231f;
+  --accent: #86a6ff; --accent-ink: #131312; --ok: #5fc58c; --warn: #e0b04a; --bad: #f07a6e;
+  --energy: #3f5594; --beat: #5c564f; --down: #ebe7e2; --rise: #5fc58c; --fall: #f09a5f; --drop: #f07a6e; --moment: #e8c050;
+  --cA: #86a6ff; --cB: #5a78c4; --cC: #8a7754; --cD: #4a4540; --cE: #8a4f47; --cX: #403b35; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15.5px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 20px; }
+.wrap > *, section.panel > *, .cols > * { min-width: 0; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 1.15rem; font-weight: 800; }
+h3 { font-size: 0.98rem; font-weight: 600; }
+p { margin: 0; }
+.muted { color: var(--muted); } .small { font-size: 0.86rem; }
+.mono { font-family: var(--f-mono); font-size: 0.84em; font-variant-numeric: tabular-nums; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; }
+button, select, input, textarea { font: inherit; }
+button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:focus-visible, select:focus-visible, summary:focus-visible, .drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+select { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 6px 10px; min-width: 0; max-width: 100%; }
+header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+header.top .lead { max-width: 68ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.78rem; background: var(--panel); white-space: nowrap; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--beat); }
+.chip.on i { background: var(--ok); } .chip.off i { background: var(--bad); }
+section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 14px; align-content: start; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.row.between { justify-content: space-between; }
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 860px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 14px; text-align: center; cursor: pointer; display: grid; gap: 2px; }
+.drop.over { border-color: var(--accent); background: var(--soft); }
+.drop strong { font-family: var(--f-display); font-size: 1rem; }
+.status { display: grid; gap: 4px; font-size: 0.88rem; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.fact { background: var(--bg); border-radius: 10px; padding: 8px 12px; display: grid; gap: 1px; }
+.fact .v { font-family: var(--f-display); font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fact .v.t { font-family: var(--f-body); font-size: 0.95rem; font-weight: 600; }
+.groups { display: grid; gap: 6px; font-size: 0.86rem; }
+.groups > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.cls { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; font-family: var(--f-mono); font-size: 0.7rem; font-weight: 500; color: var(--ink); }
+.cls.A { background: var(--cA); color: var(--accent-ink); } .cls.B { background: var(--cB); color: var(--accent-ink); } .cls.C { background: var(--cC); } .cls.D { background: var(--cD); } .cls.E { background: var(--cE); }
+.pill { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tabs button { display: grid; text-align: left; gap: 2px; max-width: 340px; flex: 1 1 220px; }
+.tabs button span { font-weight: 400; font-size: 0.82rem; color: var(--muted); }
+.tabs button[aria-pressed="true"] { border-color: var(--accent); background: var(--soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.log { font-family: var(--f-mono); font-size: 0.74rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 170px; overflow: auto; white-space: pre-wrap; }
+.notice { border-left: 3px solid var(--warn); padding: 8px 12px; background: var(--soft); border-radius: 0 8px 8px 0; font-size: 0.9rem; }
+.notice.info { border-left-color: var(--accent); }
+.prose { display: grid; gap: 10px; }
+.acts5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.act { border-top: 3px solid var(--line); padding-top: 8px; display: grid; gap: 4px; align-content: start; font-size: 0.92rem; }
+.act:nth-child(1) { border-top-color: var(--cB); } .act:nth-child(2) { border-top-color: var(--cB); } .act:nth-child(3) { border-top-color: var(--accent); } .act:nth-child(4) { border-top-color: var(--cA); } .act:nth-child(5) { border-top-color: var(--muted); }
+.tlbox { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.tlbox svg { display: block; min-width: 780px; width: 100%; height: auto; }
+svg text { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
+svg .shotlabel { fill: var(--ink); font-family: var(--f-body); font-size: 11px; font-weight: 600; }
+svg .shotlabel.inv { fill: var(--accent-ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.78rem; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 10px; margin-right: 5px; vertical-align: -1px; border-radius: 2px; }
+.st { display: grid; gap: 6px; }
+.st .r { display: grid; grid-template-columns: minmax(150px, 230px) minmax(0, 1fr) 92px; gap: 10px; align-items: center; font-size: 0.86rem; }
+@media (max-width: 620px) { .st .r { grid-template-columns: minmax(0, 1fr) 80px; } .st .r .track { grid-column: 1 / -1; grid-row: 2; } }
+.st .name { overflow-wrap: anywhere; }
+.st .track { position: relative; height: 14px; background: var(--soft); border-radius: 4px; }
+.st .band { position: absolute; top: 0; bottom: 0; background: transparent; border: 1px dashed var(--muted); border-radius: 4px; }
+.st .used { position: absolute; top: 3px; bottom: 3px; left: 0; border-radius: 3px; }
+.st .v { font-family: var(--f-mono); font-size: 0.74rem; text-align: right; white-space: nowrap; }
+.tablebox { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
+td.n { font-family: var(--f-mono); font-size: 0.76rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.reason { min-width: 240px; }
+.shots td.clip { min-width: 150px; }
+.srcbar { position: relative; height: 10px; width: 120px; background: var(--soft); border-radius: 3px; margin-top: 4px; }
+.srcbar span { position: absolute; top: 0; bottom: 0; }
+.srcbar .u { background: var(--line); }
+.srcbar .s { background: var(--cB); opacity: 0.45; }
+.srcbar .w { background: repeating-linear-gradient(45deg, var(--bad) 0 2px, transparent 2px 4px); opacity: 0.6; }
+.srcbar .x { background: var(--accent); top: 2px; bottom: 2px; border-radius: 2px; }
+.checks { display: grid; gap: 8px; }
+.check { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.88rem; }
+.check ul { margin: 2px 0 0; padding-left: 18px; }
+.p-ok { color: var(--ok); } .p-warn { color: var(--warn); } .p-error { color: var(--bad); } .p-info { color: var(--muted); }
+pre { margin: 0; font-family: var(--f-mono); font-size: 0.72rem; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 380px; overflow: auto; background: var(--bg); padding: 10px; border-radius: 8px; }
+details summary { cursor: pointer; font-weight: 600; }
+.empty { text-align: center; padding: 26px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); }
+.kv { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 4px 14px; font-size: 0.88rem; }
+@media (max-width: 620px) { .kv { grid-template-columns: minmax(0, 1fr); } }
+textarea { width: 100%; font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 8px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="lead">
+      <h1>Video Director</h1>
+      <p class="muted">Schnittplaner für Immobilienvideos. Er liest zwei fertige Analysen, Claude plant den Schnitt, und der Code prüft jeden Shot gegen diese Analysen. Kein Render, kein Shotstack-Edit, keine Uploads.</p>
+    </div>
+    <div class="chips" aria-label="Verfügbarkeit">
+      <span class="chip" id="cap-sample"><i></i>Claude</span>
+      <span class="chip" id="cap-dl"><i></i>Download</span>
+    </div>
+  </header>
+  <p class="notice" id="nocaps" hidden></p>
+
+  <div class="cols">
+    <section class="panel" aria-labelledby="h-clip">
+      <div class="row between"><h2 id="h-clip">1 · Clip Analysis JSON</h2><span class="small muted mono">clip-analysis-export@1</span></div>
+      <div class="drop" id="drop-clip" tabindex="0" role="button" aria-label="Clip-Analyse-JSON hochladen">
+        <strong>Clip-Analyse laden</strong>
+        <span class="small muted">JSON aus „Clip-Gewichtung“ hierher ziehen oder klicken</span>
+      </div>
+      <input type="file" id="file-clip" accept=".json,application/json" hidden>
+      <div id="clip-info"></div>
+    </section>
+    <section class="panel" aria-labelledby="h-music">
+      <div class="row between"><h2 id="h-music">2 · Music Analysis JSON</h2><span class="small muted mono">music-analysis-export@1</span></div>
+      <div class="drop" id="drop-music" tabindex="0" role="button" aria-label="Musik-Analyse-JSON hochladen">
+        <strong>Musik-Analyse laden</strong>
+        <span class="small muted">JSON aus „Musik-Struktur“ hierher ziehen oder klicken</span>
+      </div>
+      <input type="file" id="file-music" accept=".json,application/json" hidden>
+      <div id="music-info"></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="h-style">
+    <h2 id="h-style">3 · Style</h2>
+    <div class="tabs" id="styles" role="group" aria-label="Style"></div>
+    <p class="small muted">Der Style gibt nur die kreative Richtung vor. Er ist keine Vorlage für Reihenfolge oder Shot-Längen.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-gen">
+    <div class="row between">
+      <h2 id="h-gen">4 · Edit Plan</h2>
+      <div class="row">
+        <button class="primary" id="btn-generate" disabled>Generate Edit Plan</button>
+        <button id="btn-regenerate" disabled>Regenerate Plan</button>
+        <button id="btn-stop" hidden>Stop</button>
+      </div>
+    </div>
+    <div id="budget"></div>
+    <div class="log" id="log" aria-live="polite">Lade beide Analysen und wähle einen Style.</div>
+  </section>
+
+  <div id="result"></div>
+</div>
+
+<script>
+// ===== CORE-BEGIN: pure functions (no AI, no DOM): read inputs, music context, normalise and validate a plan, build the export =====
+const FPS = 25, FRAME = 1 / FPS, RULES_VERSION = "video-director-rules/1 · 2026-10-19", ARTIFACT_URL = "https://claude.ai/artifact/TKVkmNaT5VhMdBe3PUdnQs";
+const r3 = x => Math.round(x * 1000) / 1000;
+const num = x => (typeof x === "number" && isFinite(x)) ? x : (x != null && x !== "" && isFinite(+x) ? +x : null);
+const sum = a => a.reduce((s, x) => s + x, 0);
+const trimDot = s => String(s ?? "").replace(/[.\s]+$/, "");
+const overlap = (a1, a2, b1, b2) => Math.max(0, Math.min(a2, b2) - Math.max(a1, b1));
+const GROUP_OF = { A: "primary", B: "primary", C: "secondary", D: "optional", E: "avoid" };
+const HARD_SEVERITY = new Set(["moderate", "major", "severe", "high", "critical"]);
+const TRANSITIONS = new Set(["none", "hard-cut", "crossfade", "dip-to-black", "fade-in", "fade-out"]);
+const SOFT = new Set(["crossfade", "dip-to-black"]);
+const STYLES = {
+  elegant: { label: "Elegant", ui: "Hochwertig und ruhig, längere Hero Shots, Raumwirkung, wenige weiche Übergänge.",
+    prompt: "premium and calm; longer hero shots that let the rooms breathe; fewer, unhurried cuts; occasionally a subtle soft transition (crossfade); hard cuts stay normal and allowed.",
+    softMax: n => Math.max(2, Math.round(n / 4)), avg: "about 2-3.5 s per shot, rarely below 1.2 s" },
+  dynamic: { label: "Dynamic", ui: "Mehr Rhythmus, Hard Cuts, Montage-Bursts, Speed-Ramps erlaubt, ruhige Hero Shots als Kontrast.",
+    prompt: "more rhythm; mostly hard cuts; quick montage bursts on beats; wide variation of shot lengths; beat-oriented; speed ramps allowed where they serve a build or a hit; calmer hero shots as contrast.",
+    softMax: () => 1, avg: "wide variation, from 0.5 s burst shots to 2.5-3.5 s hero shots" },
+  cinematic: { label: "Cinematic", ui: "Spannungsbogen: ruhiger Aufbau, Builds, Peaks und Releases, Hero Shots auf wichtigen Musikmomenten.",
+    prompt: "a tension arc; calm build; use builds, peaks and releases; the strongest rooms on the important musical moments; deliberate hero placement; alternate calm and intensity; hard cuts plus a few purposeful filmic transitions (crossfade, dip-to-black).",
+    softMax: () => 3, avg: "1.5-3.5 s with deliberate contrasts, short shots only at intensity peaks" }
+};
+
+// ---- inputs: the two export schemas -> one internal input schema (director-input@1) ----
+function readClipExport(j) {
+  const errors = [], warnings = [];
+  if (!j || typeof j !== "object") return { errors: ["Keine JSON-Struktur."], warnings };
+  if (j.meta?.schema !== "clip-analysis-export@1") return { errors: [j.meta?.schema === "music-analysis-export@1" ? "Das ist eine Musik-Analyse. Hier gehört die Clip-Analyse hin." : `Unbekanntes Schema: ${j.meta?.schema ?? "fehlt"}. Erwartet: clip-analysis-export@1.`], warnings };
+  if (!Array.isArray(j.clips) || !j.clips.length) return { errors: ["Die Datei enthält keine Clips."], warnings };
+  if (j.meta.comparisonCoversLatestAnalyses === false) warnings.push("Der Vergleich (Phase 2) deckt nicht die neuesten Einzelanalysen ab.");
+  const clips = [];
+  j.clips.forEach((c, i) => {
+    const name = c.filename || c.clipId || `Clip ${i + 1}`, D = num(c.duration), us = num(c.usableStart), ue = num(c.usableEnd);
+    if (!D || D <= 0) { errors.push(`${name}: Dauer fehlt.`); return; }
+    if (us == null || ue == null || us < -0.01 || ue > D + 0.05 || ue - us < 0.2) { errors.push(`${name}: usableStart/usableEnd fehlen oder passen nicht zur Dauer.`); return; }
+    if (!"ABCDE".includes(c.priorityClass || "-")) warnings.push(`${name}: priorityClass fehlt.`);
+    const wS = c.weakStart && num(c.weakStart.to) != null ? { from: num(c.weakStart.from) ?? 0, to: num(c.weakStart.to), reason: c.weakStart.reason || "" } : null;
+    const wE = c.weakEnd && num(c.weakEnd.from) != null ? { from: num(c.weakEnd.from), to: num(c.weakEnd.to) ?? D, reason: c.weakEnd.reason || "" } : null;
+    // safe range = usable range minus the weak start/end the analysis names (hard limit for the director)
+    const a = r3(Math.max(us, wS && wS.from <= us + 0.05 ? wS.to : us)), b = r3(Math.min(ue, wE && wE.to >= ue - 0.05 ? wE.from : ue));
+    const problems = (c.detectedProblems || []).filter(p => num(p.from) != null && num(p.to) != null).map(p => ({ type: p.type || "problem", from: +p.from, to: +p.to, severity: p.severity || "minor", note: p.note || "", hard: HARD_SEVERITY.has(String(p.severity).toLowerCase()) }));
+    let ss = num(c.strongestStart), se = num(c.strongestEnd);
+    if (ss == null || se == null || se <= ss) { ss = a; se = b; warnings.push(`${name}: kein stärkster Bereich, der sichere Bereich wird genutzt.`); }
+    if (b - a < 0.4) warnings.push(`${name}: sicherer Bereich nur ${r3(Math.max(0, b - a))} s.`);
+    if (num(c.recommendedMaxScreenTime) == null) warnings.push(`${name}: recommendedMaxScreenTime fehlt.`);
+    clips.push({ ref: `K${clips.length + 1}`, clipId: c.clipId || name, filename: name, rank: num(c.rank) ?? i + 1, duration: D,
+      roomType: c.roomType || "other", sceneType: c.sceneType || null, description: c.shortDescription || "",
+      priorityClass: c.priorityClass || "D", group: c.group || GROUP_OF[c.priorityClass] || "optional", finalScore: num(c.finalScore),
+      contentWeight: num(c.contentWeight), editingPriority: num(c.editingPriority), screenTimePriority: num(c.screenTimePriority),
+      propertyImportance: num(c.propertyImportance), viewerInterest: num(c.viewerInterest), visualStrength: num(c.visualStrength), heroPotential: c.heroPotential ?? null,
+      usable: [us, ue], safe: [a, b], strongest: [r3(Math.max(ss, a)), r3(Math.min(se, b))], weakStart: wS, weakEnd: wE, problems,
+      hardCuts: (c.hardCuts || []).map(x => num(x?.t ?? x)).filter(x => x != null),
+      movementGoodFrom: num(c.movementGoodFrom), perspectiveWorseFrom: num(c.perspectiveWorseFrom),
+      minScreen: num(c.recommendedMinScreenTime), maxScreen: num(c.recommendedMaxScreenTime),
+      playback: c.recommendedPlayback || "normal", playbackReason: c.playbackReason || "", camera: c.cameraMovement || null,
+      roles: c.recommendedRoles || [], preferredRole: c.recommendedRole || null, segments: (c.segments || []).map(s => ({ from: num(s.from), to: num(s.to), label: s.label, note: s.note })),
+      weaknesses: c.weaknesses || [], bestUse: c.bestUseSummary || "", screenTimeReason: c.screenTimeReason || "", weightReason: c.weightReason || "",
+      uniqueness: c.comparison?.uniqueness ?? null, similarTo: (c.comparison?.similarTo || []).map(s => s.filename || s.clipId), relativeReason: c.comparison?.relativeReason || "" });
+  });
+  if (!clips.length) return { errors, warnings };
+  clips.sort((x, y) => x.rank - y.rank); clips.forEach((c, i) => { c.ref = `K${i + 1}`; });
+  const byFile = Object.fromEntries(clips.map(c => [c.filename, c]));
+  return { errors, warnings, data: { schema: "director-input/clips@1", source: { schema: j.meta.schema, exportedAt: j.meta.exportedAt || null, setId: j.meta.setId || null, setName: j.meta.setName || null, comparisonId: j.meta.comparisonId || null, comparedAt: j.meta.comparedAt || null, analysisVersion: j.meta.analysisVersion ?? null, comparisonCoversLatestAnalyses: j.meta.comparisonCoversLatestAnalyses ?? null },
+    overview: j.property?.overview || "", sellingPoints: j.property?.sellingPoints || [], similarGroups: (j.property?.similarGroups || []).map(g => ({ note: g.note, clips: (g.clips || []).map(x => byFile[x.filename]?.ref || x.filename) })), clips } };
+}
+function readMusicExport(j) {
+  const errors = [], warnings = [];
+  if (!j || typeof j !== "object") return { errors: ["Keine JSON-Struktur."], warnings };
+  if (j.meta?.schema !== "music-analysis-export@1") return { errors: [j.meta?.schema === "clip-analysis-export@1" ? "Das ist eine Clip-Analyse. Hier gehört die Musik-Analyse hin." : `Unbekanntes Schema: ${j.meta?.schema ?? "fehlt"}. Erwartet: music-analysis-export@1.`], warnings };
+  const T = j.technical || {}, bars = (T.bars?.list || []).filter(b => num(b.start) != null);
+  if (!bars.length) errors.push("Keine Takte (technical.bars.list) in der Datei.");
+  const D = num(j.meta.duration ?? j.track?.duration);
+  if (!D) errors.push("Dauer fehlt.");
+  const cands = (j.candidates?.list || []).filter(c => num(c.start) != null && num(c.end) != null);
+  let sel = j.selectedSection && num(j.selectedSection.usableStart) != null && num(j.selectedSection.usableEnd) != null ? j.selectedSection : null;
+  if (!sel && !cands.length) errors.push("Weder selectedSection noch Kandidaten vorhanden.");
+  if (sel && (sel.usableEnd > D + 0.05 || sel.usableEnd - sel.usableStart < 5)) { errors.push("selectedSection liegt nicht im Track."); sel = null; }
+  if (sel && sel.continuous === false) errors.push("selectedSection ist nicht durchgehend.");
+  if (T.bars?.countNote) warnings.push(`Taktraster: ${T.bars.count} Takte, Shotstack meldet ${T.bars.shotstackBarsCount}. Musik-Struktur hat doppelte Downbeats entfernt; die Energie pro Takt kann dadurch leicht verschoben sein.`);
+  if (!j.structure?.available) warnings.push("Keine gedeutete Struktur vorhanden, nur Messwerte.");
+  if (errors.length) return { errors, warnings };
+  const list = (o, f) => (o?.list || []).map(f);
+  return { errors, warnings, data: { schema: "director-input/music@1",
+    source: { schema: j.meta.schema, exportedAt: j.meta.exportedAt || null, trackId: j.meta.trackId, filename: j.meta.filename, analyzedAt: j.meta.analysisVersion || j.meta.createdAt || null, interpretedAt: j.meta.interpretedAt || null },
+    trackId: j.meta.trackId, filename: j.meta.filename || j.track?.filename || "track", duration: D,
+    bpm: num(T.bpm?.value), steady: !!T.steady?.value, meter: num(T.meter?.value), beatLen: num(T.beatLength?.value), barLen: num(T.barLength?.value) || 2,
+    beats: (T.beats?.times || []).map(Number), beatsSource: T.beats?.source || "unavailable", downbeats: (T.downbeats?.times || []).map(Number),
+    bars: bars.map(b => ({ index: b.index, start: +b.start, end: +b.end, energy: num(b.energy) })),
+    sections: list(T.sections, s => ({ time: +s.time, bar: s.bar, change: s.change })), drops: list(T.drops, x => ({ time: +x.time, bar: x.bar ?? null })),
+    jumps: list(T.energyJumps, x => ({ time: +x.time, bar: x.bar, delta: x.delta })), peaks: list(T.peaks?.substitute, x => ({ time: +x.time, bar: x.bar, energy: x.energy })),
+    low: list(T.lowEnergy, x => ({ from: +x.from, to: +x.to })),
+    structure: (j.structure?.sections || []).map(s => ({ type: s.type, title: s.title, start: +s.start, end: +s.end, meanEnergy: s.meanEnergy ?? null, basis: s.basis || "", flags: s.checkFlags || [] })),
+    summary: j.structure?.summary || "",
+    kmTech: (j.keyMoments?.technical || []).map(k => ({ t: +k.timestamp, type: k.type, strength: k.strength ?? null, source: k.source })),
+    kmInt: (j.keyMoments?.interpreted || []).map(k => ({ t: +k.timestamp, type: k.type, note: k.note || "", flags: k.checkFlags || [] })),
+    selected: sel ? { start: +sel.usableStart, end: +sel.usableEnd, duration: r3(sel.usableEnd - sel.usableStart), selection: sel.selection || "selected", candidateId: sel.candidateId || null, style: sel.style || null, score: sel.score ?? null } : null,
+    candidates: cands.map(c => ({ id: c.id, style: c.style, length: c.targetLength, rank: c.rank, start: +c.start, end: +c.end, duration: r3(c.end - c.start), score: c.score, reason: c.reason || "", note: c.claudeNote || null })) } };
+}
+function sectionOf(music, key) {
+  if ((!key || key === "selected") && music.selected) return { key: "selected", ...music.selected, label: `${music.selected.selection === "marked-by-user" ? "markiert" : "vorgeschlagen"} in Musik-Struktur${music.selected.candidateId ? ` (${music.selected.candidateId})` : ""}` };
+  const c = music.candidates.find(x => x.id === key) || music.candidates[0];
+  return c ? { key: c.id, start: c.start, end: c.end, duration: c.duration, selection: "candidate", candidateId: c.id, style: c.style, score: c.score, label: `Kandidat ${c.id}` } : null;
+}
+
+// ---- music inside the chosen section, in video time (track time − section start) ----
+function musicCtx(music, sec) {
+  const s0 = sec.start, L = sec.duration, rel = t => r3(t - s0), inS = t => t >= s0 - 0.01 && t <= s0 + L + 0.01;
+  const bars = music.bars.filter(b => b.start >= s0 - 0.05 && b.start < s0 + L - 0.01).map((b, k) => ({ i: b.index, k, t: rel(b.start), e: b.energy }));
+  const beats = music.beats.filter(inS).map(rel), downbeats = (music.downbeats.length ? music.downbeats : music.bars.map(b => b.start)).filter(inS).map(rel);
+  const sections = music.sections.filter(s => inS(s.time)).map(s => ({ t: rel(s.time), change: s.change, bar: s.bar }));
+  const drops = music.drops.filter(x => inS(x.time)).map(x => ({ t: rel(x.time), bar: x.bar }));
+  const jumps = music.jumps.filter(x => inS(x.time)).map(x => ({ t: rel(x.time), delta: x.delta, bar: x.bar }));
+  const peaks = music.peaks.filter(x => inS(x.time)).map(x => ({ t: rel(x.time), e: x.energy, bar: x.bar }));
+  const low = music.low.filter(x => overlap(x.from, x.to, s0, s0 + L) > 0).map(x => ({ from: rel(Math.max(x.from, s0)), to: rel(Math.min(x.to, s0 + L)) }));
+  const structure = music.structure.filter(s => overlap(s.start, s.end, s0, s0 + L) > 0.05).map(s => ({ from: rel(Math.max(s.start, s0)), to: rel(Math.min(s.end, s0 + L)), type: s.type, title: s.title, meanEnergy: s.meanEnergy }));
+  const kmTech = music.kmTech.filter(k => inS(k.t)).map(k => ({ t: rel(k.t), type: k.type, strength: k.strength }));
+  const kmInt = music.kmInt.filter(k => inS(k.t)).map(k => ({ t: rel(k.t), type: k.type, note: k.note }));
+  const before = music.bars.filter(b => b.start < s0 - 0.05).slice(-2).map(b => b.energy), after = music.bars.filter(b => b.start >= s0 + L - 0.01).slice(0, 2).map(b => b.energy);
+  const grid = [...new Set([0, ...beats, ...downbeats, ...bars.map(b => b.t), ...sections.map(s => s.t), ...drops.map(d => d.t), L].map(r3))].sort((a, b) => a - b);
+  return { s0, L, bars, beats, downbeats, sections, drops, jumps, peaks, low, structure, kmTech, kmInt, before, after, grid, barLen: music.barLen, bpm: music.bpm };
+}
+// what a video time point sits on, musically (code, from the music analysis)
+function alignOf(mc, t) {
+  const near = (arr, tol = 2 * FRAME) => arr.find(x => Math.abs(x - t) <= tol);
+  const parts = [], bar = mc.bars.find(b => Math.abs(b.t - t) <= 2 * FRAME);
+  if (mc.drops.some(d => Math.abs(d.t - t) <= 2 * FRAME)) parts.push("drop");
+  const sec = mc.sections.find(s => Math.abs(s.t - t) <= 2 * FRAME); if (sec) parts.push(`section ${sec.change}`);
+  if (bar) parts.push(`downbeat · bar ${bar.i}${bar.k % 4 === 0 ? " · 4-bar phrase" : bar.k % 2 === 0 ? " · 2-bar phrase" : ""}`);
+  else if (near(mc.downbeats) != null) parts.push("downbeat");
+  else if (near(mc.beats) != null) parts.push("beat");
+  const j = mc.jumps.find(x => Math.abs(x.t - t) <= 2 * FRAME); if (j) parts.push(`energy ${j.delta > 0 ? "rise" : "fall"} ${j.delta > 0 ? "+" : ""}${j.delta}`);
+  if (Math.abs(t) < 1e-3) parts.unshift("section start");
+  if (Math.abs(t - mc.L) < 2 * FRAME) parts.push("section end");
+  const onGrid = parts.length > 0;
+  if (!onGrid) { const nb = mc.beats.reduce((m, b) => Math.abs(b - t) < Math.abs(m - t) ? b : m, Infinity); parts.push(isFinite(nb) ? `off-grid (${t > nb ? "+" : ""}${Math.round((t - nb) * 1000)} ms to beat)` : "off-grid"); }
+  return { label: parts.join(" · "), onGrid };
+}
+
+// ---- speed ramps: speed is linear between points in source time; before/after the points it holds ----
+function speedAtS(points, s) {
+  if (s <= points[0].atSource) return points[0].speed;
+  for (let i = 0; i < points.length - 1; i++) if (s <= points[i + 1].atSource) { const a = points[i], b = points[i + 1], f = (s - a.atSource) / Math.max(1e-6, b.atSource - a.atSource); return a.speed + f * (b.speed - a.speed); }
+  return points[points.length - 1].speed;
+}
+function rampTime(points, s1, s2, step = 0.001) { let t = 0; for (let s = s1; s < s2 - 1e-9; s += step) { const ds = Math.min(step, s2 - s); t += ds / Math.max(0.05, speedAtS(points, s + ds / 2)); } return t; }
+function rampSourceEnd(points, s1, duration, step = 0.001) {
+  let t = 0, s = s1;
+  while (t < duration - 1e-9 && s < s1 + 60) { const v = Math.max(0.05, speedAtS(points, s + step / 2)), dt = step / v; if (t + dt >= duration) { s += (duration - t) * v; break; } t += dt; s += step; }
+  return s;
+}
+function rampSegments(points, s1, s2, t1) {
+  const cuts = [s1, ...points.map(p => p.atSource).filter(x => x > s1 + 1e-3 && x < s2 - 1e-3), s2]; let t = t1;
+  return cuts.slice(1).map((b, i) => { const a = cuts[i], dt = rampTime(points, a, b); const seg = { sourceStart: r3(a), sourceEnd: r3(b), timelineStart: r3(t), timelineEnd: r3(t + dt), averageSpeed: r3((b - a) / dt) }; t += dt; return seg; });
+}
+const normTransition = x => { const s = String(x ?? "").toLowerCase().trim().replace(/[\s_]+/g, "-"); return ({ "": "hard-cut", cut: "hard-cut", hard: "hard-cut", "hardcut": "hard-cut", "cross-fade": "crossfade", dissolve: "crossfade", "dip-black": "dip-to-black", "fade-to-black": "dip-to-black", fadein: "fade-in", fadeout: "fade-out" })[s] || s; };
+const SOFT_DEFAULT = { crossfade: 0.4, "dip-to-black": 0.5, "fade-in": 0.4, "fade-out": 0.6 };
+
+// ---- normalise Claude's plan: exact arithmetic by code, every change recorded ----
+function normalizePlan(raw, clipSet, mc, styleId) {
+  const corrections = [], note = (shot, msg) => corrections.push({ shot, msg });
+  const byRef = Object.fromEntries(clipSet.clips.map(c => [c.ref, c])), byFile = Object.fromEntries(clipSet.clips.map(c => [c.filename, c]));
+  let D = num(raw.videoDuration) ?? mc.L;
+  if (Math.abs(D - mc.L) <= 0.15 || D > mc.L) { if (Math.abs(D - mc.L) > 1e-3) note(null, `Videodauer ${r3(D)} s → ${r3(mc.L)} s (Länge des Musikabschnitts).`); D = mc.L; }
+  D = r3(D);
+  const snap = t => { const g = mc.grid.reduce((b, x) => Math.abs(x - t) < Math.abs(b - t) ? x : b, Infinity); return Math.abs(g - t) <= 0.05 ? g : r3(t); };
+  let shots = (raw.shots || []).map((s, i) => ({ raw: s, clip: byRef[s.clip] || byFile[s.clip] || byFile[s.sourceClip] || clipSet.clips.find(c => c.clipId === s.clip) || null,
+    ts: num(s.timelineStart), te: num(s.timelineEnd), ss: num(s.sourceStart), se: num(s.sourceEnd), speed: num(s.playbackSpeed) ?? 1, i }))
+    .filter(s => s.ts != null && s.te != null).sort((a, b) => a.ts - b.ts);
+  // cut points: close sub-0.1 s gaps/overlaps between neighbours, snap to the music grid within 50 ms
+  shots.forEach((s, i) => {
+    if (i === 0 && Math.abs(s.ts) <= 0.1) { if (s.ts !== 0) note(1, `Start ${s.ts} s → 0 s.`); s.ts = 0; }
+    const nx = shots[i + 1];
+    if (nx && Math.abs(nx.ts - s.te) <= 0.1) { const c = snap((nx.ts + s.te) / 2); if (Math.abs(c - s.te) > FRAME || Math.abs(c - nx.ts) > FRAME) note(i + 1, `Schnitt ${s.te} / ${nx.ts} s → ${c} s (Lücke geschlossen, auf Raster gelegt).`); s.te = c; nx.ts = c; }
+    else if (nx) s.te = snap(s.te);
+    if (!nx && Math.abs(s.te - D) <= 0.1) { if (Math.abs(s.te - D) > 1e-3) note(i + 1, `Ende ${s.te} s → ${D} s.`); s.te = D; }
+  });
+  const uses = {};
+  const out = shots.map((s, i) => {
+    const n = i + 1, c = s.clip, dur = r3(s.te - s.ts), r = s.raw;
+    let ramp = null;
+    const pts = Array.isArray(r.speedRamp?.points) ? r.speedRamp.points.map(p => ({ atSource: num(p.atSource), speed: num(p.speed) })).filter(p => p.atSource != null && p.speed != null && p.speed > 0).sort((a, b) => a.atSource - b.atSource) : [];
+    if (r.speedRamp && r.speedRamp.enabled !== false && pts.length >= 2) ramp = { points: pts.map(p => ({ atSource: r3(p.atSource), speed: r3(p.speed) })), reason: r.speedRamp.reason || "" };
+    else if (r.speedRamp && r.speedRamp.enabled !== false && pts.length) note(n, "Speed-Ramp mit weniger als zwei Punkten entfernt.");
+    let ss = s.ss ?? (c ? c.strongest[0] : 0), se, speed = s.speed;
+    const spanOf = start => ramp ? rampSourceEnd(ramp.points, start, dur) - start : dur * speed;
+    se = r3(ss + spanOf(ss));
+    if (s.se != null && Math.abs(se - s.se) > FRAME) note(n, `sourceEnd ${s.se} → ${se} s (aus Dauer ${dur} s × ${ramp ? "Ramp" : `Speed ${speed}`}).`);
+    // if the recomputed end runs past the safe range, shift the source window back by at most 0.3 s (ramp points move with it)
+    if (c && se > c.safe[1] + 0.005) { const shift = r3(se - c.safe[1]); if (shift <= 0.3 && ss - shift >= c.safe[0] - 0.005) { ss = r3(ss - shift); se = r3(se - shift); if (ramp) ramp.points.forEach(p => { p.atSource = r3(p.atSource - shift); }); note(n, `Source-Bereich um ${shift} s nach vorn verschoben, damit er im sicheren Bereich endet.`); } }
+    const avg = r3((se - ss) / Math.max(1e-6, dur));
+    if (!ramp && Math.abs(avg - speed) > 0.002) speed = avg;
+    let tin = normTransition(r.transitionIn ?? (i ? "hard-cut" : "none")), tout = normTransition(r.transitionOut ?? (i === shots.length - 1 ? "none" : "hard-cut"));
+    if (i === 0 && tin === "hard-cut") tin = "none";
+    if (i === shots.length - 1 && tout === "hard-cut") tout = "none";
+    if (i > 0 && tin === "none") tin = "hard-cut";
+    if (i < shots.length - 1 && tout === "none") tout = "hard-cut";
+    const outDur = SOFT.has(tout) || tout === "fade-out" ? r3(num(r.transitionDuration) || num(r.transitionOutDuration) || SOFT_DEFAULT[tout]) : 0;
+    if (c) uses[c.ref] = (uses[c.ref] || 0) + 1;
+    return { shotNumber: n, clip: c, ref: c?.ref || String(r.clip), ts: s.ts, te: s.te, dur, ss, se, speed: ramp ? avg : r3(speed), ramp, tin, tout, inDur: tin === "fade-in" ? r3(num(r.transitionInDuration) || SOFT_DEFAULT["fade-in"]) : 0, outDur,
+      role: r.role || "", musicalMoment: r.musicalMoment || r.music?.alignedTo || "", reason: r.reason || "", usageIndex: c ? uses[c.ref] : null };
+  });
+  // a soft transition belongs to both shots of a cut
+  out.forEach((s, i) => { const nx = out[i + 1]; if (!nx) return;
+    if (SOFT.has(s.tout) && nx.tin !== s.tout) { if (nx.tin !== "hard-cut") note(nx.shotNumber, `transitionIn ${nx.tin} → ${s.tout} (passend zu Shot ${s.shotNumber}).`); nx.tin = s.tout; }
+    if (SOFT.has(nx.tin) && s.tout !== nx.tin) { note(s.shotNumber, `transitionOut ${s.tout} → ${nx.tin} (passend zu Shot ${nx.shotNumber}).`); s.tout = nx.tin; s.outDur = r3(num(nx.raw?.transitionDuration) || SOFT_DEFAULT[nx.tin]); }
+    if (SOFT.has(s.tout)) nx.inDur = s.outDur; });
+  // source handles a soft transition needs (half its duration on each side of the cut, at the speed there)
+  out.forEach(s => {
+    const vEnd = s.ramp ? speedAtS(s.ramp.points, s.se) : s.speed, vStart = s.ramp ? speedAtS(s.ramp.points, s.ss) : s.speed;
+    s.handleAfter = SOFT.has(s.tout) ? r3(s.outDur / 2 * vEnd) : 0; s.handleBefore = SOFT.has(s.tin) ? r3(s.inDur / 2 * vStart) : 0;
+  });
+  return { videoDuration: D, shots: out, corrections, style: styleId };
+}
+
+// ---- validation: every rule from the brief, measured against the two analyses ----
+function validatePlan(p, clipSet, mc, styleId) {
+  const checks = [], add = (id, label) => { const c = { id, label, items: [] }; checks.push(c); return c; };
+  const it = (c, level, msg, shot) => c.items.push({ level, msg, ...(shot ? { shot } : {}) });
+  const S = p.shots, n = S.length, eps = 0.02;
+  const cSrc = add("source-in-clip", "Source-Zeit innerhalb der Clipdauer");
+  const cUse = add("usable-range", "Nur usableStart bis usableEnd genutzt");
+  const cWeak = add("weak-ranges", "Schwache Bereiche und Probleme gemieden");
+  const cTl = add("timeline", "Timeline lückenlos");
+  const cMu = add("music", "Musik am Stück, Video im Musikabschnitt");
+  const cRep = add("repetition", "Wiederholungen begrenzt");
+  const cSec = add("secondary-screen-time", "Sekundäre Räume nicht überbetont");
+  const cImp = add("important-screen-time", "Wichtige Clips mit genug Screentime");
+  const cSp = add("speed", "Speed und Speed-Ramps korrekt und sinnvoll");
+  const cTr = add("transitions", "Übergänge ohne Timing-Fehler");
+  const cSync = add("music-sync", "Schnitte auf musikalischen Punkten");
+  S.forEach(s => {
+    const c = s.clip, k = s.shotNumber, a = s.ss - s.handleBefore, b = s.se + s.handleAfter;
+    if (!c) { it(cSrc, "error", `Shot ${k}: unbekannter Clip „${s.ref}“.`, k); return; }
+    if (s.se <= s.ss) it(cSrc, "error", `Shot ${k}: sourceEnd liegt nicht nach sourceStart.`, k);
+    if (a < -eps || b > c.duration + eps) it(cSrc, "error", `Shot ${k} (${c.filename}): ${r3(a)}–${r3(b)} s, der Clip dauert ${c.duration} s.`, k);
+    if (a < c.usable[0] - eps || b > c.usable[1] + eps) it(cUse, "error", `Shot ${k} (${c.filename}): nutzt ${r3(a)}–${r3(b)} s${s.handleBefore || s.handleAfter ? " inkl. Übergangs-Handles" : ""}, nutzbar ist ${c.usable[0]}–${c.usable[1]} s.`, k);
+    for (const [w, nm] of [[c.weakStart, "schwacher Anfang"], [c.weakEnd, "schwaches Ende"]]) if (w && overlap(a, b, w.from, w.to) > eps) it(cWeak, "error", `Shot ${k} (${c.filename}): ${nm} ${w.from}–${w.to} s wird genutzt (${trimDot(w.reason)}).`, k);
+    for (const pr of c.problems) { const o = overlap(a, b, pr.from, pr.to); if (o > eps) it(cWeak, pr.hard ? "error" : "warn", `Shot ${k} (${c.filename}): ${pr.severity} „${pr.type}“ ${pr.from}–${pr.to} s im genutzten Bereich${pr.note ? `: ${trimDot(pr.note)}` : ""}.`, k); }
+    for (const h of c.hardCuts) if (h > a + eps && h < b - eps) it(cWeak, "error", `Shot ${k} (${c.filename}): harter Schnitt im Clip bei ${h} s wird überspielt.`, k);
+    if (c.perspectiveWorseFrom != null && b > c.perspectiveWorseFrom + 0.1 && !(c.weakEnd && c.weakEnd.from <= c.perspectiveWorseFrom)) it(cWeak, "warn", `Shot ${k} (${c.filename}): läuft über ${c.perspectiveWorseFrom} s hinaus, ab dort wird die Perspektive laut Analyse schwächer.`, k);
+    if (s.dur < 0.4 - 1e-3) it(cTl, "error", `Shot ${k}: ${s.dur} s ist kürzer als 0,4 s.`, k);
+    else if (s.dur < 1.0 && styleId === "elegant") it(cTl, "warn", `Shot ${k}: ${s.dur} s ist für Elegant sehr kurz.`, k);
+  });
+  if (!n) it(cTl, "error", "Der Plan enthält keine Shots.");
+  else {
+    if (Math.abs(S[0].ts) > eps) it(cTl, "error", `Die Timeline beginnt erst bei ${S[0].ts} s.`);
+    S.forEach((s, i) => { const nx = S[i + 1]; if (nx && Math.abs(nx.ts - s.te) > eps) it(cTl, "error", `${nx.ts > s.te ? "Lücke" : "Überlappung"} zwischen Shot ${s.shotNumber} (Ende ${s.te} s) und Shot ${nx.shotNumber} (Start ${nx.ts} s).`, nx.shotNumber); });
+    if (Math.abs(S[n - 1].te - p.videoDuration) > eps) it(cTl, "error", `Der letzte Shot endet bei ${S[n - 1].te} s, das Video dauert ${p.videoDuration} s.`);
+  }
+  // music: one continuous piece of the track; the plan cannot cut it, the check makes that explicit
+  if (p.videoDuration > mc.L + eps) it(cMu, "error", `Video (${p.videoDuration} s) ist länger als der Musikabschnitt (${r3(mc.L)} s).`);
+  else if (p.videoDuration < mc.L - eps) {
+    const endBar = mc.bars.some(b => Math.abs(b.t - p.videoDuration) <= 2 * FRAME);
+    it(cMu, endBar && p.videoDuration >= 23 - eps ? "info" : "warn", `Video endet bei ${p.videoDuration} s, vor dem Ende des Abschnitts (${r3(mc.L)} s)${endBar ? " auf einem Taktanfang" : ", nicht auf einem Taktanfang"}${p.videoDuration < 23 - eps ? ", unter 23 s" : ""}. Die Musik läuft trotzdem am Stück und wird am Ende ausgeblendet.`);
+  }
+  it(cMu, "info", `Musik läuft ohne Schnitt, Sprung oder Loop von Track ${r3(mc.s0)} s bis ${r3(mc.s0 + Math.min(p.videoDuration, mc.L))} s.`);
+  if (p.videoDuration < 23 - eps || p.videoDuration > 32 + eps) it(cMu, "warn", `Videolänge ${p.videoDuration} s liegt außerhalb von 23–32 s.`);
+  // repetition
+  const byClip = {}; S.forEach(s => { if (s.clip) (byClip[s.clip.ref] ||= []).push(s); });
+  for (const [ref, list] of Object.entries(byClip)) {
+    const c = list[0].clip;
+    if (list.length > 2) it(cRep, "error", `${c.filename} kommt ${list.length}× vor, erlaubt sind höchstens 2.`);
+    if (list.length === 2) {
+      const [x, y] = list, o = overlap(x.ss, x.se, y.ss, y.se) / Math.max(1e-6, Math.min(x.se - x.ss, y.se - y.ss));
+      if (o > 0.5) it(cRep, "warn", `${c.filename}: die zweite Verwendung (Shot ${y.shotNumber}) zeigt zu ${Math.round(o * 100)} % denselben Source-Bereich wie Shot ${x.shotNumber}.`);
+      if ("CDE".includes(c.priorityClass)) it(cRep, "warn", `${c.filename} (Klasse ${c.priorityClass}, ${c.roomType}) wird wiederholt, obwohl er nur sekundär ist.`);
+    }
+  }
+  S.forEach((s, i) => { const nx = S[i + 1]; if (nx && s.clip && nx.clip === s.clip) it(cRep, "warn", `Shot ${s.shotNumber} und ${nx.shotNumber} nutzen direkt hintereinander denselben Clip (${s.clip.filename}).`); });
+  // screen time against the analysis
+  const tot = Object.fromEntries(clipSet.clips.map(c => [c.ref, r3(sum((byClip[c.ref] || []).map(s => s.dur)))]));
+  const usedA = clipSet.clips.filter(c => c.priorityClass === "A" && tot[c.ref] > 0), minA = usedA.length ? Math.min(...usedA.map(c => tot[c.ref])) : null;
+  let secTotal = 0;
+  for (const c of clipSet.clips) {
+    const t = tot[c.ref];
+    if ("CDE".includes(c.priorityClass) && t > 0) {
+      secTotal += t;
+      if (c.maxScreen != null && t > c.maxScreen * 1.2 + 0.1) it(cSec, "error", `${c.filename} (Klasse ${c.priorityClass}, ${c.roomType}): ${t} s, empfohlen höchstens ${c.maxScreen} s.`);
+      if (minA != null && t > minA + 0.05) it(cSec, "warn", `${c.filename} (Klasse ${c.priorityClass}) bekommt mit ${t} s mehr Zeit als der schwächste genutzte A-Clip (${minA} s).`);
+      if (c.priorityClass === "E") it(cSec, "warn", `${c.filename} steht in der Gruppe „avoid“ und wird trotzdem genutzt.`);
+    }
+    if ("AB".includes(c.priorityClass)) {
+      if (!t) it(cImp, c.priorityClass === "A" ? "error" : "warn", `${c.filename} (Klasse ${c.priorityClass}, ${c.roomType}) fehlt im Plan.`);
+      else if (c.minScreen != null && t < c.minScreen - 0.1) it(cImp, "warn", `${c.filename} (Klasse ${c.priorityClass}): nur ${t} s, empfohlen mindestens ${c.minScreen} s.`);
+      if (t && c.maxScreen != null && t > c.maxScreen * 1.6) it(cImp, "warn", `${c.filename}: ${t} s, deutlich über der Empfehlung (${c.maxScreen} s).`);
+    }
+  }
+  if (p.videoDuration && secTotal / p.videoDuration > 0.35) it(cSec, "warn", `Sekundäre Clips (C–E) füllen ${Math.round(secTotal / p.videoDuration * 100)} % des Videos.`);
+  // speed
+  const rampMax = Math.max(1, Math.ceil(n / 5));
+  S.forEach(s => {
+    const c = s.clip, k = s.shotNumber; if (!c) return;
+    const span = s.ramp ? rampTime(s.ramp.points, s.ss, s.se) : (s.se - s.ss) / s.speed;
+    if (Math.abs(span - s.dur) > FRAME) it(cSp, "error", `Shot ${k}: Source-Bereich und Dauer passen nicht zur Geschwindigkeit (${r3(span)} s statt ${s.dur} s).`, k);
+    const speeds = s.ramp ? s.ramp.points.map(x => x.speed) : [s.speed];
+    if (speeds.some(v => v < 0.5 || v > 2)) it(cSp, "error", `Shot ${k}: Speed ${speeds.join(" → ")} liegt außerhalb von 0,5–2,0.`, k);
+    else if (speeds.some(v => Math.abs(v - 1) > 0.35)) it(cSp, "warn", `Shot ${k}: starke Speed-Änderung (${speeds.join(" → ")}).`, k);
+    const changed = s.ramp || Math.abs(s.speed - 1) > 0.02;
+    if (changed && /avoid/i.test(c.playback)) it(cSp, "error", `Shot ${k} (${c.filename}): Analyse sagt „${c.playback}“, der Plan ändert die Geschwindigkeit.`, k);
+    else if (Math.abs(s.speed - 1) > 0.15 && c.playback === "normal" && !s.ramp) it(cSp, "warn", `Shot ${k} (${c.filename}): Speed ${s.speed}, die Analyse empfiehlt normale Geschwindigkeit.`, k);
+    if (s.ramp) {
+      if (s.ramp.points.some(x => x.atSource < s.ss - eps || x.atSource > s.se + eps)) it(cSp, "warn", `Shot ${k}: Ramp-Punkte liegen außerhalb des Source-Bereichs ${s.ss}–${s.se} s.`, k);
+      if (!s.ramp.reason) it(cSp, "warn", `Shot ${k}: Speed-Ramp ohne Begründung.`, k);
+      if (c.problems.some(pr => overlap(s.ss, s.se, pr.from, pr.to) > eps)) it(cSp, "warn", `Shot ${k}: Speed-Ramp auf einem Bereich mit gemeldetem Problem.`, k);
+    }
+  });
+  const ramps = S.filter(s => s.ramp).length;
+  if (ramps > rampMax) it(cSp, "warn", `${ramps} Speed-Ramps bei ${n} Shots. Gezielt wären höchstens ${rampMax}.`);
+  // transitions
+  let soft = 0;
+  S.forEach((s, i) => {
+    const k = s.shotNumber;
+    for (const [v, side] of [[s.tin, "transitionIn"], [s.tout, "transitionOut"]]) if (!TRANSITIONS.has(v)) it(cTr, "error", `Shot ${k}: ${side} „${v}“ ist nicht erlaubt.`, k);
+    if (s.tin === "fade-in" && i) it(cTr, "error", `Shot ${k}: fade-in ist nur am ersten Shot erlaubt.`, k);
+    if (s.tout === "fade-out" && i !== n - 1) it(cTr, "error", `Shot ${k}: fade-out ist nur am letzten Shot erlaubt.`, k);
+    if (s.tin === "none" && i) it(cTr, "error", `Shot ${k}: transitionIn „none“ mitten in der Timeline.`, k);
+    if (SOFT.has(s.tout)) { soft++; const nx = S[i + 1];
+      if (!nx) it(cTr, "error", `Shot ${k}: ${s.tout} am letzten Shot hat keinen Folgeshot.`, k);
+      else if (s.outDur > 0.4 * s.dur + 1e-3 || s.outDur > 0.4 * nx.dur + 1e-3) it(cTr, "error", `Shot ${k}→${nx.shotNumber}: ${s.tout} mit ${s.outDur} s ist zu lang für ${s.dur} s / ${nx.dur} s Shots (höchstens 40 %).`, k); }
+    if (s.tout === "fade-out" && s.outDur > s.dur * 0.8) it(cTr, "error", `Shot ${k}: fade-out ${s.outDur} s ist länger als der Shot erlaubt.`, k);
+  });
+  const softMax = STYLES[styleId]?.softMax(n) ?? 2;
+  if (soft > softMax) it(cTr, "warn", `${soft} weiche Übergänge bei ${n} Shots. Für ${STYLES[styleId]?.label} sind höchstens ${softMax} vorgesehen.`);
+  // music sync of every cut
+  const cuts = S.slice(1).map(s => ({ shot: s.shotNumber, t: s.ts, a: alignOf(mc, s.ts) })), off = cuts.filter(c => !c.a.onGrid);
+  if (off.length) it(cSync, "warn", `${off.length} von ${cuts.length} Schnitten liegen auf keinem Beat: ${off.map(c => `Shot ${c.shot} bei ${c.t} s (${c.a.label})`).join("; ")}.`);
+  it(cSync, "info", `${cuts.length - off.length} von ${cuts.length} Schnitten auf Beat, Downbeat, Drop oder Section-Wechsel; ${cuts.filter(c => /downbeat|drop|section/.test(c.a.label)).length} davon auf Downbeat, Drop oder Section-Wechsel.`);
+  checks.forEach(c => { c.status = c.items.some(x => x.level === "error") ? "error" : c.items.some(x => x.level === "warn") ? "warn" : "ok"; });
+  const errors = checks.flatMap(c => c.items.filter(x => x.level === "error").map(x => ({ check: c.id, ...x }))), warnings = checks.flatMap(c => c.items.filter(x => x.level === "warn").map(x => ({ check: c.id, ...x })));
+  return { passed: !errors.length, errors, warnings, checks, screenTime: tot };
+}
+
+// ---- export: meta, music, style, timeline, shots, validation, summary (no UI data) ----
+function buildPlanExport(st) {
+  const { plan: p, val, clipSet, music, sec, mc, ai, styleId, attempts, createdAt } = st;
+  const used = new Set(p.shots.filter(s => s.clip).map(s => s.clip.ref));
+  const omittedReason = Object.fromEntries((ai.summary?.omitted || []).map(o => [o.clip, o.reason]));
+  const shots = p.shots.map(s => ({
+    shotNumber: s.shotNumber, sourceClip: s.clip?.filename ?? s.ref, clipId: s.clip?.clipId ?? null, roomType: s.clip?.roomType ?? null, priorityClass: s.clip?.priorityClass ?? null,
+    usageIndex: s.usageIndex, sourceStart: s.ss, sourceEnd: s.se, timelineStart: s.ts, timelineEnd: s.te, duration: s.dur, playbackSpeed: s.speed,
+    speedRamp: s.ramp ? { enabled: true, points: s.ramp.points, reason: s.ramp.reason, segments: rampSegments(s.ramp.points, s.ss, s.se, s.ts) } : null,
+    transitionIn: s.tin, transitionInDuration: s.inDur, transitionOut: s.tout, transitionOutDuration: s.outDur, sourceHandleBefore: s.handleBefore, sourceHandleAfter: s.handleAfter,
+    role: s.role,
+    music: { absoluteTrackStart: r3(mc.s0 + s.ts), absoluteTrackEnd: r3(mc.s0 + s.te), relativeVideoStart: s.ts, relativeVideoEnd: s.te, alignedTo: alignOf(mc, s.ts).label, musicalMoment: s.musicalMoment },
+    reason: s.reason }));
+  return {
+    meta: { schema: "video-director-plan@1", createdAt, exportedAt: new Date().toISOString(), generator: { artifact: "Video Director", url: ARTIFACT_URL, rules: RULES_VERSION },
+      planner: "claude-interpretation", arithmetic: "derived-code", attempts: attempts.map(a => ({ kind: a.kind, at: a.at, errors: a.errors, warnings: a.warnings })),
+      inputs: { clipAnalysis: clipSet.source, musicAnalysis: music.source } },
+    music: { trackId: music.trackId, filename: music.filename, bpm: music.bpm, barLength: music.barLen,
+      section: { start: sec.start, end: sec.end, duration: sec.duration, selection: sec.selection, candidateId: sec.candidateId },
+      used: { trackStart: r3(mc.s0), trackEnd: r3(mc.s0 + p.videoDuration), duration: p.videoDuration, videoStart: 0 }, continuous: true, internalCuts: 0, jumps: 0, loops: 0,
+      fadeOut: p.videoDuration < sec.duration - 0.02 ? { atVideo: p.videoDuration, note: "video ends before the section end; music fades out at the end" } : null },
+    style: { id: styleId, label: STYLES[styleId].label, direction: STYLES[styleId].prompt },
+    timeline: { fps: FPS, duration: p.videoDuration, shotCount: p.shots.length,
+      cuts: p.shots.slice(1).map(s => ({ atVideo: s.ts, atTrack: r3(mc.s0 + s.ts), betweenShots: [s.shotNumber - 1, s.shotNumber], transition: s.tin, alignedTo: alignOf(mc, s.ts).label })),
+      end: { atVideo: p.videoDuration, atTrack: r3(mc.s0 + p.videoDuration), alignedTo: alignOf(mc, p.videoDuration).label } },
+    shots,
+    validation: { passed: val.passed, errorCount: val.errors.length, warningCount: val.warnings.length, checks: val.checks.map(c => ({ id: c.id, label: c.label, status: c.status, items: c.items })), corrections: p.corrections },
+    summary: { style: STYLES[styleId].label, sourceMusicTrack: music.filename, selectedMusicSection: { start: sec.start, end: sec.end, duration: sec.duration },
+      finalVideoDuration: p.videoDuration, numberOfShots: p.shots.length, uniqueClips: used.size,
+      reusedClips: clipSet.clips.filter(c => p.shots.filter(s => s.clip === c).length > 1).map(c => c.filename),
+      omittedClips: clipSet.clips.filter(c => !used.has(c.ref)).map(c => ({ filename: c.filename, priorityClass: c.priorityClass, reason: omittedReason[c.ref] || null })),
+      primaryHeroClips: (ai.summary?.heroClips || []).map(r => clipSet.clips.find(c => c.ref === r)?.filename || r),
+      screenTime: clipSet.clips.map(c => ({ filename: c.filename, priorityClass: c.priorityClass, roomType: c.roomType, seconds: val.screenTime[c.ref], uses: p.shots.filter(s => s.clip === c).length, recommendedMin: c.minScreen, recommendedMax: c.maxScreen })),
+      speedRamps: p.shots.filter(s => s.ramp).length, softTransitions: p.shots.filter(s => SOFT.has(s.tout)).length,
+      overallDramaturgy: ai.summary?.overallDramaturgy || "", editingConcept: ai.summary?.editingConcept || "", creative: ai.creative || {}, directorAnalysis: ai.directorAnalysis || {} }
+  };
+}
+// ===== CORE-END =====
+</script>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const fx = (x, d = 2) => (x == null || !isFinite(+x)) ? "–" : (+x).toFixed(d);
+  const fmtDate = iso => { try { return new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return iso || "–"; } };
+  const log = (msg, cls) => { const el = $("log"); if (!el.dataset.used) { el.textContent = ""; el.dataset.used = "1"; } const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = `${new Date().toLocaleTimeString("de-DE")}  ${msg}`; el.appendChild(d); el.scrollTop = el.scrollHeight; };
+  const store = { get: k => { try { return localStorage.getItem("vd." + k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem("vd." + k) : localStorage.setItem("vd." + k, v); } catch {} } };
+  const S = { sample: null, downloads: null, clipRaw: null, musicRaw: null, clip: null, music: null, clipName: "", musicName: "", style: store.get("style") || "dynamic", secKey: store.get("sec") || "selected", busy: false, ctl: null, run: null, live: "" };
+  if (!STYLES[S.style]) S.style = "dynamic";
+
+  // ---------- inputs ----------
+  function loadInput(kind, text, name) {
+    let j; try { j = JSON.parse(text); } catch (e) { S[kind] = { errors: [`Kein gültiges JSON (${e.message}).`], warnings: [] }; S[kind + "Name"] = name; render(); return; }
+    S[kind] = kind === "clip" ? readClipExport(j) : readMusicExport(j); S[kind + "Name"] = name; S[kind + "Raw"] = text;
+    if (!S[kind].errors.length) { store.set(kind, text); store.set(kind + "Name", name); }
+    if (kind === "music") { const sec = S.music.data && sectionOf(S.music.data, S.secKey); if (S.music.data && (!sec || sec.key !== S.secKey)) S.secKey = "selected"; }
+    render();
+  }
+  for (const kind of ["clip", "music"]) {
+    const drop = $("drop-" + kind), inp = $("file-" + kind);
+    const read = f => { if (!f) return; const r = new FileReader(); r.onload = () => loadInput(kind, String(r.result), f.name); r.readAsText(f); };
+    drop.addEventListener("click", () => inp.click());
+    drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inp.click(); } });
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); read(e.dataTransfer.files[0]); });
+    inp.addEventListener("change", () => { read(inp.files[0]); inp.value = ""; });
+  }
+  document.addEventListener("change", e => { if (e.target.id === "sec-select") { S.secKey = e.target.value; store.set("sec", S.secKey); render(); } });
+  document.addEventListener("click", e => {
+    const b = e.target.closest("button[data-style]"); if (b) { S.style = b.dataset.style; store.set("style", S.style); render(); return; }
+    const x = e.target.closest("button[data-act]"); if (!x) return;
+    if (x.dataset.act === "export") exportPlan(); if (x.dataset.act === "copy") copyPlan();
+  });
+  const ready = () => S.clip?.data && S.music?.data && sectionOf(S.music.data, S.secKey);
+
+  // ---------- Claude ----------
+  const C = x => JSON.stringify(x);
+  function clipLine(c) {
+    return C({ id: c.ref, file: c.filename, room: c.roomType, scene: c.sceneType, what: c.description, class: c.priorityClass, group: c.group, finalScore: c.finalScore,
+      contentWeight: c.contentWeight, editingPriority: c.editingPriority, screenTimePriority: c.screenTimePriority, propertyImportance: c.propertyImportance, viewerInterest: c.viewerInterest, visualStrength: c.visualStrength, heroPotential: c.heroPotential,
+      duration: c.duration, usable: c.usable, SAFE: c.safe, strongest: c.strongest, weakStart: c.weakStart, weakEnd: c.weakEnd,
+      problems: c.problems.map(p => ({ type: p.type, from: p.from, to: p.to, severity: p.severity, note: p.note })), hardCuts: c.hardCuts, movementGoodFrom: c.movementGoodFrom, perspectiveWorseFrom: c.perspectiveWorseFrom,
+      screenTime: [c.minScreen, c.maxScreen], playback: c.playback, playbackReason: c.playbackReason, camera: c.camera, roles: c.roles, preferredRole: c.preferredRole,
+      segments: c.segments, bestUse: c.bestUse, screenTimeReason: c.screenTimeReason, uniqueness: c.uniqueness, similarTo: c.similarTo, relativeReason: c.relativeReason });
+  }
+  function basePrompt(cs, music, sec, mc, styleId) {
+    const st = STYLES[styleId], safeTotal = r3(sum(cs.clips.map(c => Math.max(0, c.safe[1] - c.safe[0]))));
+    return `You are the director and editor of a short real-estate video. You plan the edit only. Two finished analyses are the source of truth: a clip analysis (content, final weights, usable source ranges, problems per clip) and a music analysis (beats, bars, energy, structure). Respect them: do not re-rate clips, re-classify rooms, invent music events or recompute beats, and never ignore usable ranges.
+
+STYLE: ${st.label}: ${st.prompt} The style sets the creative direction; it is not a template. Typical shot lengths: ${st.avg} (guidance only).
+
+MUSIC (one continuous piece, never cut): track "${music.filename}", ${fx(music.bpm, 1)} BPM, bar ${fx(music.barLen, 3)} s. The video uses the track from ${r3(sec.start)} s to ${r3(sec.end)} s in one piece: no internal cuts, jumps or loops; the edit adapts to the music, never the other way round. Video time 0 = track time ${r3(sec.start)} s. videoDuration = ${r3(mc.L)} s; prefer the full section. End earlier only exactly on a bar start, at 23 s or later, when the material cannot fill it well, and say why.
+All music times below are VIDEO times (track time − ${r3(sec.start)}).
+Bars [video time s, energy 0-1, bar index] (Shotstack bars.energy): ${C(mc.bars.map(b => [b.t, b.e, b.i]))}
+Energy of the 2 bars before the section: ${C(mc.before)}, after it: ${C(mc.after)}
+Downbeats: ${C(mc.downbeats)}
+Beats (${music.beatsSource}): ${C(mc.beats)}
+Sections (Shotstack energy changes): ${C(mc.sections)}
+Drops (Shotstack): ${mc.drops.length ? C(mc.drops) : "none in this section (do not describe a drop)"}
+Energy jumps between bars (code, |delta| >= 0.25): ${C(mc.jumps)}
+Energy peaks (code): ${C(mc.peaks)}; quiet stretches (code): ${C(mc.low)}
+Interpreted structure (music module, checked against the data): ${C(mc.structure)}
+Key moments, measured: ${C(mc.kmTech)}
+Key moments, interpreted: ${C(mc.kmInt)}
+
+PROPERTY: ${cs.source.setName || "set"}. ${cs.overview}
+Selling points: ${C(cs.sellingPoints)}
+Similar clips: ${C(cs.similarGroups)}
+CLIPS, ranked; weights are final after the comparison of all clips. SAFE = usable range minus the weak start/end (hard limit). screenTime = recommended total [min, max] s for the whole video:
+${cs.clips.map(clipLine).join("\n")}
+Material: SAFE source time of all clips together ${safeTotal} s; the section needs ${r3(mc.L)} s.
+
+THINK FIRST and write it into "directorAnalysis": 1. What sells this property? 2. Which clips are strongest? 3. Which only support? 4. Which source ranges are truly good? 5. How does this music section develop? 6. Where are the strong beats, downbeats, drops and energy changes? 7. Which dramaturgy follows from that? Only then build the timeline.
+
+EDIT RULES
+- The final weighting must be visible: primary clips (class A/B, high contentWeight and screenTimePriority) get clearly more screen time and the key musical moments. Typically primary: exterior, living, living/dining, kitchen, terrace, balcony, garden, pool, view, strong architecture; typically secondary: bathroom, WC, hallway, office, gym, dressing room, side rooms. The concrete clip analysis decides, not the room name.
+- No fixed room order (not automatically exterior, living, kitchen, bedroom, bathroom, exterior) and no fixed rhythm pattern. Use such a shape only if this music calls for it. The best edit matters more than being different.
+- Clips may be left out; six well used clips beat eight forced ones. A source clip appears at most twice, the second time only with a creative purpose and preferably another source range (e.g. a short teaser early, a longer hero later). Never repeat to fill time, never repeat secondary clips.
+- Source ranges: stay inside SAFE (hard). Prefer the strongest range. Never use weak ranges, problem ranges or ranges across a hard cut. Cut shorter rather than longer.
+- Playback speed: 1.0 by default. Change it only where the used range is clean, the motion profits and the music supports it, never to squeeze or stretch material. Respect "playback" (no change at all when it says "avoid speed change"). Useful range 0.75-1.4.
+- Speed ramps: rare and purposeful (a build into a strong downbeat, a drop, an energy rise) on a stable camera range. "points": [{"atSource": source s, "speed": n}], ascending, inside the shot's source range; speed changes linearly between points.
+- Cuts sit on musically meaningful points: downbeats, bar starts, drops, section changes, energy jumps, clear beats. Not every beat needs a cut: think in phrases (often 1, 2 or 4 bars per idea). Short bursts (0.5-0.9 s per shot) only where style and music carry them, on beats, followed by a calmer shot.
+- Transitions: "hard-cut" is the default. Allowed: hard-cut, crossfade, dip-to-black, fade-in (first shot only), fade-out (last shot only), none (first shot's transitionIn, last shot's transitionOut). Do not put effects between all clips. A soft transition sits centred on the cut and needs source handles of half its duration on both sides, also inside SAFE; keep it at most 40 % of each neighbouring shot.
+- Timeline: shots are contiguous from 0 to videoDuration, without gaps; a shot's timelineEnd equals the next shot's timelineStart.
+- Arithmetic: duration = timelineEnd - timelineStart; constant speed: sourceEnd = sourceStart + duration x playbackSpeed. The code recomputes and checks it.
+
+OUTPUT JSON only. Write every free-text value in German, concise (reason at most 30 words). Use the clip ids (K1...).
+{"directorAnalysis": {"sells": string, "strongest": string, "supporting": string, "goodRanges": string, "musicDevelopment": string, "syncPoints": string, "dramaturgy": string},
+ "creative": {"opening": string, "build": string, "energyMiddle": string, "heroMoments": string, "finale": string},
+ "summary": {"overallDramaturgy": string, "editingConcept": string, "heroClips": [clip id], "omitted": [{"clip": clip id, "reason": string}]},
+ "videoDuration": number,
+ "shots": [{"clip": clip id, "sourceStart": number, "sourceEnd": number, "timelineStart": number, "timelineEnd": number, "playbackSpeed": number, "speedRamp": null or {"points": [{"atSource": number, "speed": number}], "reason": string}, "transitionIn": string, "transitionOut": string, "transitionDuration": number (0 for hard-cut), "role": string (e.g. opening-hero, establishing, teaser, hero, detail, burst, bridge, finale), "musicalMoment": string (what in the music this shot starts on or serves), "reason": string}]}`;
+  }
+  const compactShots = ai => C((ai.shots || []).map(s => ({ clip: s.clip, src: [s.sourceStart, s.sourceEnd], tl: [s.timelineStart, s.timelineEnd], speed: s.playbackSpeed, ramp: s.speedRamp ? s.speedRamp.points : null, out: s.transitionOut, role: s.role })));
+  function regenPrompt(prev) {
+    return `\n\nA PREVIOUS PLAN for the same inputs exists (compact, below). Make a new plan. Do not change it just to be different: keep what objectively fits the music, improve what is weaker. Quality over variety.\nPrevious editing concept: ${prev.summary?.editingConcept || ""}\nPrevious shots: ${compactShots(prev)}`;
+  }
+  function repairPrompt(ai, val, p) {
+    const list = a => a.map(x => `- ${x.msg}`).join("\n") || "- none";
+    return `\n\nYOUR PREVIOUS ANSWER was checked by code against both analyses. Fix every ERROR; fix the WARNINGS where that makes the edit better. Return the complete corrected plan in the same JSON format; keep everything that was fine (concept, analysis, good shots).
+ERRORS:\n${list(val.errors)}\nWARNINGS:\n${list(val.warnings)}
+Code corrections already applied (arithmetic): ${C(p.corrections.map(c => c.msg))}
+Your previous plan: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: ai.shots })}`;
+  }
+  function extractJSON(text) {
+    const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, ""), a = t.indexOf("{"), b = t.lastIndexOf("}");
+    if (a < 0 || b < a) throw { code: "invalid_json", message: "Keine JSON-Antwort." };
+    return JSON.parse(t.slice(a, b + 1));
+  }
+  async function ask(prompt, label) {
+    S.live = ""; const t0 = Date.now(), ctl = new AbortController(); S.ctl = ctl;
+    const res = await S.sample(prompt, { modelTier: "complex", cache: false, signal: ctl.signal, onText: ({ text }) => { S.live = text; const el = $("live"); if (el) el.textContent = `${label}: ${text.length.toLocaleString("de-DE")} Zeichen geschrieben …`; } });
+    if (res.truncated) throw { code: "truncated", message: "Die Antwort wurde abgeschnitten." };
+    return { ai: extractJSON(res.text), text: res.text, ms: Date.now() - t0, tier: res.modelTierApplied };
+  }
+  async function generate(regen) {
+    if (!ready() || S.busy || !S.sample) return;
+    const cs = S.clip.data, music = S.music.data, sec = sectionOf(music, S.secKey), mc = musicCtx(music, sec), styleId = S.style;
+    const prev = regen ? S.run?.ai : null;
+    const base = basePrompt(cs, music, sec, mc, styleId) + (prev ? regenPrompt(prev) : "");
+    S.busy = true; render();
+    const run = { styleId, sec, attempts: [], createdAt: new Date().toISOString(), promptBytes: new Blob([base]).size };
+    try {
+      log(`${regen ? "Neuer Plan (Regenerate)" : "Plan"} für ${STYLES[styleId].label}, Musik ${fx(sec.start)}–${fx(sec.end)} s: Claude denkt zuerst über Immobilie und Musik nach …`);
+      let r = await ask(base, "Plan"), ai = r.ai, kind = regen ? "regenerate" : "generate";
+      for (let round = 0; ; round++) {
+        const p = normalizePlan(ai, cs, mc, styleId), val = validatePlan(p, cs, mc, styleId);
+        run.attempts.push({ kind, at: new Date().toISOString(), ms: r.ms, tier: r.tier, errors: val.errors.length, warnings: val.warnings.length, corrections: p.corrections.length, raw: r.text, errorList: val.errors.map(e => e.msg) });
+        log(`${kind === "repair" ? `Korrektur ${round}` : "Plan"}: ${p.shots.length} Shots, ${val.errors.length} Fehler, ${val.warnings.length} Hinweise, ${p.corrections.length} Rechenkorrekturen (${Math.round(r.ms / 1000)} s).`, val.errors.length ? "warn" : "ok");
+        if (!val.errors.length || round >= 2) {
+          Object.assign(run, { ai, plan: p, val, clipSet: cs, music, mc });
+          if (val.errors.length) log(`Nach ${round} Korrekturrunden bleiben ${val.errors.length} Fehler. Der Plan ist markiert und sollte neu erzeugt werden.`, "bad");
+          break;
+        }
+        log(`Plan wird intern korrigiert (Runde ${round + 1} von 2) …`);
+        kind = "repair"; r = await ask(basePrompt(cs, music, sec, mc, styleId) + repairPrompt(ai, val, p), `Korrektur ${round + 1}`); ai = r.ai;
+      }
+      S.run = run; persistRun();
+    } catch (e) {
+      const msg = { not_granted: "Claude wurde für diese Seite nicht freigegeben.", rate_limited: "Zu viele Anfragen. Bitte kurz warten.", cancelled: "Abgebrochen.", truncated: "Die Antwort war zu lang und wurde abgeschnitten. Bitte erneut versuchen.", invalid_json: "Claude hat kein gültiges JSON geliefert. Bitte erneut versuchen." }[e?.code] || `Fehler: ${e?.message || e}`;
+      log(msg, e?.code === "cancelled" ? "" : "bad");
+    } finally { S.busy = false; S.ctl = null; render(); }
+  }
+  $("btn-generate").addEventListener("click", () => generate(false));
+  $("btn-regenerate").addEventListener("click", () => generate(true));
+  $("btn-stop").addEventListener("click", () => S.ctl?.abort());
+  function persistRun() { try { const r = S.run; store.set("run", JSON.stringify({ ai: r.ai, styleId: r.styleId, secKey: r.sec.key, attempts: r.attempts, createdAt: r.createdAt, promptBytes: r.promptBytes })); } catch {} }
+  function restoreRun() {
+    let saved; try { saved = JSON.parse(store.get("run") || "null"); } catch { saved = null; }
+    if (!saved || !ready()) return;
+    const cs = S.clip.data, music = S.music.data, sec = sectionOf(music, saved.secKey); if (!sec || !STYLES[saved.styleId]) return;
+    const mc = musicCtx(music, sec), p = normalizePlan(saved.ai, cs, mc, saved.styleId);
+    S.run = { ...saved, sec, mc, clipSet: cs, music, plan: p, val: validatePlan(p, cs, mc, saved.styleId) };
+  }
+
+  // ---------- export ----------
+  const exportName = d => `edit-plan-${d.style.id}-${String(d.music.filename).replace(/\.[a-z0-9]+$/i, "").normalize("NFKD").replace(/[^\w-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 40)}-${d.meta.createdAt.slice(0, 10)}.json`;
+  const note = (msg, cls) => { const n = $("export-note"); if (!n) return; n.hidden = !msg; n.textContent = msg || ""; n.className = "small " + (cls || "muted"); };
+  async function exportPlan() {
+    if (!S.run?.plan || !S.downloads) return; const d = buildPlanExport({ ...S.run, styleId: S.run.styleId }), fn = exportName(d);
+    try { const r = await S.downloads.save({ filename: fn, data: JSON.stringify(d, null, 2) }); note(r?.status === "delivered" ? `${fn} übergeben.` : `${fn} gespeichert.`, "ok"); }
+    catch (e) { note(e?.code === "declined" ? "Download abgebrochen." : `Download nicht möglich (${e?.code || e?.message || e}). „Copy JSON“ geht trotzdem.`, e?.code === "declined" ? "muted" : "warn"); }
+  }
+  async function copyPlan() {
+    if (!S.run?.plan) return; const text = JSON.stringify(buildPlanExport({ ...S.run, styleId: S.run.styleId }), null, 2), fb = $("export-fallback");
+    try { await navigator.clipboard.writeText(text); fb.hidden = true; note(`JSON kopiert (${Math.round(text.length / 1024)} KB).`, "ok"); }
+    catch { fb.hidden = false; fb.value = text; fb.focus(); fb.select(); note("Die Zwischenablage ist hier gesperrt. Das JSON steht unten markiert; mit Strg/Cmd + C kopieren.", "warn"); }
+  }
+
+  // ---------- render ----------
+  const cls = c => `<span class="cls ${esc(c)}">${esc(c)}</span>`;
+  const statusList = r => !r ? "" : `<div class="status">${r.errors.map(e => `<span class="bad">✕ ${esc(e)}</span>`).join("")}${r.errors.length ? "" : `<span class="ok">✓ gültig</span>`}${r.warnings.map(w => `<span class="warn">! ${esc(w)}</span>`).join("")}</div>`;
+  function renderClip() {
+    const r = S.clip; if (!r) { $("clip-info").innerHTML = `<p class="small muted">Noch keine Datei. Exportiere sie in „Clip-Gewichtung“ mit „Export JSON“.</p>`; return; }
+    const d = r.data, groups = d ? ["A", "B", "C", "D", "E"].map(k => [k, d.clips.filter(c => c.priorityClass === k)]).filter(x => x[1].length) : [];
+    $("clip-info").innerHTML = `<div class="small muted mono">${esc(S.clipName)}</div>${statusList(r)}${d ? `
+      <div class="facts"><div class="fact"><span class="label">Immobilie</span><span class="v t">${esc(d.source.setName || d.source.setId || "–")}</span></div><div class="fact"><span class="label">Clips</span><span class="v">${d.clips.length}</span></div><div class="fact"><span class="label">Sichere Quellzeit</span><span class="v">${fx(sum(d.clips.map(c => Math.max(0, c.safe[1] - c.safe[0]))), 1)} s</span></div><div class="fact"><span class="label">Vergleich</span><span class="v t">${fmtDate(d.source.comparedAt)}</span></div></div>
+      ${d.overview ? `<p class="small">${esc(d.overview)}</p>` : ""}
+      <div class="groups">${groups.map(([k, list]) => `<div><span>${cls(k)} <span class="small muted">${{ A: "primary", B: "primary", C: "secondary", D: "optional", E: "avoid" }[k]}</span></span><span>${list.map(c => `${esc(c.filename)} <span class="muted">· ${esc(c.roomType)} · ${fx(c.finalScore, 1)}</span>`).join("<br>")}</span></div>`).join("")}</div>` : ""}`;
+  }
+  function renderMusic() {
+    const r = S.music; if (!r) { $("music-info").innerHTML = `<p class="small muted">Noch keine Datei. Exportiere sie in „Musik-Struktur“ mit „Export JSON“.</p>`; return; }
+    const d = r.data, sec = d && sectionOf(d, S.secKey);
+    const opts = d ? [d.selected ? `<option value="selected" ${S.secKey === "selected" ? "selected" : ""}>Auswahl aus Musik-Struktur · ${fx(d.selected.start)}–${fx(d.selected.end)} s</option>` : "",
+      ...d.candidates.filter(c => c.style === S.style || c.style === "neutral" || c.id === S.secKey).map(c => `<option value="${esc(c.id)}" ${S.secKey === c.id ? "selected" : ""}>${esc(c.id)} · ${fx(c.start)}–${fx(c.end)} s · ${fx(c.score, 1)}</option>`)].join("") : "";
+    $("music-info").innerHTML = `<div class="small muted mono">${esc(S.musicName)}</div>${statusList(r)}${d && sec ? `
+      <div class="facts"><div class="fact"><span class="label">Track</span><span class="v t">${esc(d.filename)}</span></div><div class="fact"><span class="label">BPM</span><span class="v">${fx(d.bpm, 1)}</span></div><div class="fact"><span class="label">Track-Dauer</span><span class="v">${fx(d.duration, 1)} s</span></div><div class="fact"><span class="label">Abschnitt</span><span class="v">${fx(sec.duration, 1)} s</span></div></div>
+      <div class="small"><b>Musikabschnitt ${fx(sec.start)} → ${fx(sec.end)} s</b> <span class="muted">· ${esc(sec.label)}. Läuft am Stück, ohne Schnitt, Sprung oder Loop.</span></div>
+      ${sectionStrip(d, sec)}
+      <label class="small muted" for="sec-select">Anderen Abschnitt aus der Analyse wählen</label><select id="sec-select">${opts}</select>` : ""}`;
+  }
+  function sectionStrip(d, sec) {
+    const W = 1000, H = 44, x = t => (t / d.duration) * W, out = [];
+    for (const b of d.bars) if (b.energy != null) out.push(`<rect x="${x(b.start)}" y="${H - 4 - b.energy * 32}" width="${Math.max(1, x(b.end) - x(b.start) - 0.6)}" height="${b.energy * 32 + 0.5}" fill="var(--energy)"/>`);
+    out.push(`<rect x="${x(sec.start)}" y="1" width="${x(sec.end) - x(sec.start)}" height="${H - 2}" fill="none" stroke="var(--accent)" stroke-width="2" rx="3"/>`);
+    return `<div class="tlbox"><svg viewBox="0 0 ${W} ${H}" style="min-width:0" role="img" aria-label="Energie des ganzen Tracks, markiert der gewählte Abschnitt">${out.join("")}</svg></div>`;
+  }
+  function renderBudget() {
+    if (!ready()) { $("budget").innerHTML = ""; return; }
+    const cs = S.clip.data, sec = sectionOf(S.music.data, S.secKey), safe = sum(cs.clips.map(c => Math.max(0, c.safe[1] - c.safe[0]))), strong = sum(cs.clips.map(c => c.strongest[1] - c.strongest[0]));
+    const recMax = sum(cs.clips.map(c => c.maxScreen || 0));
+    $("budget").innerHTML = `<p class="notice ${safe >= sec.duration ? "info" : ""}">Material: ${fx(safe, 1)} s sichere Quellzeit (davon ${fx(strong, 1)} s stärkste Bereiche) in ${cs.clips.length} Clips, empfohlene Screentime zusammen ${fx(recMax, 1)} s. Der Musikabschnitt dauert ${fx(sec.duration, 1)} s.${recMax < sec.duration ? " Der Director muss also gezielt wiederholen, langsamer abspielen oder Hero Shots ausdehnen, ohne schwache Bereiche zu nutzen." : ""}</p>`;
+  }
+  function render() {
+    $("styles").innerHTML = Object.entries(STYLES).map(([k, s]) => `<button data-style="${k}" aria-pressed="${k === S.style}">${s.label}<span>${s.ui}</span></button>`).join("");
+    renderClip(); renderMusic(); renderBudget();
+    $("btn-generate").disabled = !ready() || S.busy || !S.sample;
+    $("btn-regenerate").disabled = !ready() || S.busy || !S.sample || !S.run?.ai;
+    $("btn-stop").hidden = !S.busy;
+    $("result").innerHTML = S.busy ? `<section class="panel"><div class="empty" id="live">Claude plant den Schnitt. Das dauert meist 1–3 Minuten …</div></section>`
+      : S.run?.plan ? results(S.run) : `<section class="panel"><div class="empty">Noch kein Plan. Lade beide Analysen, wähle einen Style und starte „Generate Edit Plan“.</div></section>`;
+  }
+
+  function timelineSVG(run) {
+    const { plan: p, mc } = run, X0 = 74, X1 = 990, W = X1 - X0, D = mc.L, x = t => X0 + (t / D) * W, out = [];
+    const yE = 16, hE = 56, yB = 78, yS = 104, hS = 44, yA = yS + hS + 18;
+    for (let s = 0; s <= D + 1e-6; s += 1) out.push(`<line x1="${x(s)}" x2="${x(s)}" y1="${yA - 8}" y2="${yA - 4}" stroke="var(--beat)"/>${s % 5 === 0 ? `<text x="${x(s)}" y="${yA + 6}" text-anchor="middle">${s}s</text>` : ""}`);
+    out.push(`<text x="${X0}" y="${yA + 20}">Track ${fx(mc.s0)} s</text><text x="${X1}" y="${yA + 20}" text-anchor="end">Track ${fx(mc.s0 + p.videoDuration)} s</text>`);
+    mc.bars.forEach((b, i) => { const end = mc.bars[i + 1]?.t ?? Math.min(D, b.t + mc.barLen); if (b.e != null) { const h = Math.max(1, b.e * hE); out.push(`<rect x="${x(Math.max(0, b.t)) + 0.5}" y="${yE + hE - h}" width="${Math.max(1, x(end) - x(Math.max(0, b.t)) - 1)}" height="${h}" fill="var(--energy)"><title>Takt ${b.i} · ${fx(b.t)} s · Energie ${b.e}</title></rect>`); } });
+    for (const t of mc.beats) out.push(`<line x1="${x(t)}" x2="${x(t)}" y1="${yB + 7}" y2="${yB + 16}" stroke="var(--beat)" stroke-width="0.8"/>`);
+    for (const t of mc.downbeats) out.push(`<line x1="${x(t)}" x2="${x(t)}" y1="${yB}" y2="${yB + 16}" stroke="var(--down)" stroke-width="1.2"/>`);
+    for (const s of mc.sections) out.push(`<line x1="${x(s.t)}" x2="${x(s.t)}" y1="${yE - 6}" y2="${yE + hE}" stroke="var(--${s.change === "fall" ? "fall" : "rise"})" stroke-width="2"><title>Section ${s.change} · ${fx(s.t)} s</title></line>`);
+    for (const d of mc.drops) out.push(`<path d="M${x(d.t) - 6},${yE - 9} L${x(d.t) + 6},${yE - 9} L${x(d.t)},${yE + 1} Z" fill="var(--drop)"><title>Drop · ${fx(d.t)} s</title></path>`);
+    for (const k of mc.kmInt) out.push(`<circle cx="${x(k.t)}" cy="${yE + hE + 3}" r="3.5" fill="var(--moment)" stroke="var(--panel)"><title>${esc(`${fx(k.t)} s ${k.type}: ${k.note}`)}</title></circle>`);
+    for (const s of p.shots) {
+      const c = s.clip, fill = c ? `var(--c${c.priorityClass})` : "var(--cX)", w = Math.max(1, x(s.te) - x(s.ts)), dark = c && "AB".includes(c.priorityClass);
+      out.push(`<rect x="${x(s.ts) + 0.5}" y="${yS}" width="${Math.max(1, w - 1)}" height="${hS}" rx="3" fill="${fill}"><title>${esc(`Shot ${s.shotNumber} · ${c?.filename} · ${fx(s.ts)}–${fx(s.te)} s · ${s.role}`)}</title></rect>`);
+      if (w > 22) out.push(`<text class="shotlabel ${dark ? "inv" : ""}" x="${x(s.ts) + 4}" y="${yS + 15}">${s.shotNumber}</text>`);
+      if (w > 46) out.push(`<text class="shotlabel ${dark ? "inv" : ""}" x="${x(s.ts) + 4}" y="${yS + 31}" style="font-weight:400;font-size:10px">${esc((c?.roomType || "").slice(0, Math.floor(w / 6.2)))}</text>`);
+      if (s.ramp) out.push(`<path d="M${x(s.ts) + 3},${yS + hS - 3} L${x(s.te) - 3},${yS + hS - 11} L${x(s.te) - 3},${yS + hS - 3} Z" fill="var(--moment)" opacity="0.9"><title>Speed-Ramp ${s.ramp.points.map(q => q.speed).join(" → ")}</title></path>`);
+      else if (Math.abs(s.speed - 1) > 0.02) out.push(`<text x="${x(s.te) - 3}" y="${yS + hS - 4}" text-anchor="end" style="fill:var(--moment)">${fx(s.speed, 2)}×</text>`);
+      if (SOFT.has(s.tout)) out.push(`<rect x="${x(s.te - s.outDur / 2)}" y="${yS - 6}" width="${x(s.te + s.outDur / 2) - x(s.te - s.outDur / 2)}" height="${hS + 12}" fill="var(--accent)" opacity="0.25"><title>${s.tout} ${s.outDur} s</title></rect>`);
+      if (s.tout === "fade-out") out.push(`<path d="M${x(s.te - s.outDur)},${yS} L${x(s.te)},${yS + hS} L${x(s.te)},${yS} Z" fill="var(--bg)" opacity="0.6"><title>fade-out ${s.outDur} s</title></path>`);
+    }
+    for (const s of p.shots.slice(1)) out.push(`<line x1="${x(s.ts)}" x2="${x(s.ts)}" y1="${yE + hE + 8}" y2="${yS}" stroke="var(--muted)" stroke-dasharray="2 2"/>`);
+    out.push(`<text x="4" y="${yE + 34}">Musik</text><text x="4" y="${yB + 13}">Beats</text><text x="4" y="${yS + 26}">Shots</text>`);
+    return `<svg viewBox="0 0 1000 ${yA + 26}" role="img" aria-label="Timeline: Musikabschnitt mit Energie und Beats, darunter die Shots">${out.join("")}</svg>`;
+  }
+  function screenTime(run) {
+    const { clipSet: cs, val, plan: p } = run, scale = Math.max(...cs.clips.map(c => Math.max(c.maxScreen || 0, val.screenTime[c.ref] || 0)), 1) * 1.05, pc = t => `${(t / scale) * 100}%`;
+    return `<div class="st">${cs.clips.map(c => { const t = val.screenTime[c.ref] || 0, u = p.shots.filter(s => s.clip === c).length;
+      return `<div class="r"><span class="name">${cls(c.priorityClass)} ${esc(c.filename)} <span class="muted small">· ${esc(c.roomType)}</span></span><span class="track" title="empfohlen ${fx(c.minScreen, 1)}–${fx(c.maxScreen, 1)} s">${c.minScreen != null && c.maxScreen != null ? `<span class="band" style="left:${pc(c.minScreen)};width:${pc(c.maxScreen - c.minScreen)}"></span>` : ""}<span class="used" style="width:${pc(t)};background:var(--c${c.priorityClass})"></span></span><span class="v">${t ? `${fx(t, 2)} s${u > 1 ? ` · ${u}×` : ""}` : `<span class="muted">ausgelassen</span>`}</span></div>`; }).join("")}</div>`;
+  }
+  const srcBar = s => { const c = s.clip; if (!c) return ""; const pc = t => `${(t / c.duration) * 100}%`, w = (a, b) => `left:${pc(a)};width:${pc(Math.max(0, b - a))}`;
+    return `<div class="srcbar" title="Clip ${c.duration} s · nutzbar ${c.usable.join("–")} s · stärkster Bereich ${c.strongest.join("–")} s"><span class="u" style="${w(...c.usable)}"></span><span class="s" style="${w(...c.strongest)}"></span>${[c.weakStart, c.weakEnd].filter(Boolean).map(x => `<span class="w" style="${w(x.from, x.to)}"></span>`).join("")}<span class="x" style="${w(s.ss - s.handleBefore, s.se + s.handleAfter)}"></span></div>`; };
+  function results(run) {
+    const { plan: p, val, ai, mc, clipSet: cs, sec } = run, st = STYLES[run.styleId], d = buildPlanExport({ ...run }), sm = d.summary;
+    const stale = run.styleId !== S.style || sec.key !== (sectionOf(S.music.data, S.secKey)?.key);
+    const pill = s => `<span class="pill p-${s}">${{ ok: "bestanden", warn: "Hinweis", error: "Fehler", info: "Info" }[s]}</span>`;
+    const A = ai.directorAnalysis || {}, Cr = ai.creative || {};
+    return `
+    <section class="panel" aria-labelledby="h-sum">
+      <div class="row between"><h2 id="h-sum">5 · Plan Summary · ${esc(st.label)}</h2><span class="small muted">erstellt ${fmtDate(run.createdAt)} · ${run.attempts.length} Claude-Aufruf${run.attempts.length === 1 ? "" : "e"}</span></div>
+      ${stale ? `<p class="notice info">Dieser Plan gehört zu Style ${esc(st.label)} und Abschnitt ${fx(sec.start)}–${fx(sec.end)} s. Für die aktuelle Auswahl „Generate Edit Plan“ starten.</p>` : ""}
+      <div class="facts">
+        <div class="fact"><span class="label">Videolänge</span><span class="v">${fx(p.videoDuration, 2)} s</span></div>
+        <div class="fact"><span class="label">Shots</span><span class="v">${p.shots.length}</span></div>
+        <div class="fact"><span class="label">Clips genutzt</span><span class="v">${sm.uniqueClips} / ${cs.clips.length}</span></div>
+        <div class="fact"><span class="label">Wiederholt</span><span class="v t">${sm.reusedClips.length ? esc(sm.reusedClips.join(", ")) : "keine"}</span></div>
+        <div class="fact"><span class="label">Ausgelassen</span><span class="v t">${sm.omittedClips.length ? esc(sm.omittedClips.map(o => o.filename).join(", ")) : "keine"}</span></div>
+        <div class="fact"><span class="label">Prüfung</span><span class="v t ${val.passed ? "ok" : "bad"}">${val.passed ? "bestanden" : `${val.errors.length} Fehler`}${val.warnings.length ? ` · ${val.warnings.length} Hinweise` : ""}</span></div>
+      </div>
+      <div class="kv">
+        <span class="muted">Musik</span><span>${esc(run.music.filename)} · ${fx(mc.s0)} → ${fx(mc.s0 + p.videoDuration)} s am Stück · ${fx(run.music.bpm, 1)} BPM</span>
+        <span class="muted">Hero-Clips</span><span>${esc(sm.primaryHeroClips.join(", ") || "–")}</span>
+        <span class="muted">Dramaturgie</span><span>${esc(sm.overallDramaturgy)}</span>
+        <span class="muted">Schnittkonzept</span><span>${esc(sm.editingConcept)}</span>
+        ${sm.omittedClips.length ? `<span class="muted">Warum ausgelassen</span><span>${sm.omittedClips.map(o => `${esc(o.filename)}: ${esc(o.reason || "keine Begründung")}`).join("<br>")}</span>` : ""}
+      </div>
+      <div class="acts5">${[["Opening", Cr.opening], ["Build", Cr.build], ["Energy / Middle", Cr.energyMiddle], ["Hero Moments", Cr.heroMoments], ["Finale", Cr.finale]].map(([h, t]) => `<div class="act"><h3>${h}</h3><p class="small">${esc(t || "–")}</p></div>`).join("")}</div>
+      <details><summary>Director-Analyse vor dem Schnitt</summary><div class="kv" style="margin-top:8px">${[["Was verkauft die Immobilie?", A.sells], ["Stärkste Clips", A.strongest], ["Nur unterstützend", A.supporting], ["Gute Source-Bereiche", A.goodRanges], ["Entwicklung der Musik", A.musicDevelopment], ["Sync-Punkte", A.syncPoints], ["Dramaturgie", A.dramaturgy]].map(([k, v]) => `<span class="muted">${k}</span><span>${esc(v || "–")}</span>`).join("")}</div></details>
+    </section>
+
+    <section class="panel" aria-labelledby="h-tl">
+      <h2 id="h-tl">Timeline</h2>
+      <div class="tlbox">${timelineSVG(run)}</div>
+      <div class="legend"><span><i style="background:var(--energy)"></i>Energie pro Takt</span><span><i style="background:var(--down);width:2px"></i>Downbeat</span><span><i style="background:var(--beat);width:2px"></i>Beat</span><span><i style="background:var(--rise);width:3px"></i>Section rise</span><span><i style="background:var(--fall);width:3px"></i>Section fall</span><span><i style="background:var(--drop)"></i>Drop</span><span><i style="background:var(--moment);border-radius:50%"></i>Key Moment</span><span><i style="background:var(--cA)"></i>Klasse A</span><span><i style="background:var(--cB)"></i>B</span><span><i style="background:var(--cC)"></i>C</span><span><i style="background:var(--cD)"></i>D</span><span><i style="background:var(--cE)"></i>E</span><span><i style="background:var(--moment)"></i>Speed-Ramp</span><span><i style="background:var(--accent);opacity:.35"></i>weicher Übergang</span></div>
+      <div><span class="label">Screentime pro Clip · gestrichelt die Empfehlung der Clip-Analyse</span><div style="margin-top:8px">${screenTime(run)}</div></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-shots">
+      <h2 id="h-shots">Shot-Liste</h2>
+      <div class="tablebox"><table class="shots"><thead><tr><th>#</th><th>Timeline</th><th>Clip</th><th>Source</th><th>Speed</th><th>Übergang</th><th>Rolle</th><th>Musik</th><th>Begründung</th></tr></thead><tbody>
+      ${p.shots.map(s => { const c = s.clip, al = alignOf(mc, s.ts);
+        return `<tr><td class="n">${s.shotNumber}</td><td class="n">${fx(s.ts)}–${fx(s.te)}<br><span class="muted">${fx(s.dur)} s</span></td>
+          <td class="clip">${c ? `${cls(c.priorityClass)} ${esc(c.filename)}<br><span class="small muted">${esc(c.roomType)}${s.usageIndex > 1 ? " · 2. Verwendung" : ""}</span>` : `<span class="bad">${esc(s.ref)}</span>`}</td>
+          <td class="n">${fx(s.ss)}–${fx(s.se)}${srcBar(s)}</td>
+          <td class="n">${s.ramp ? `Ramp<br><span class="muted">${s.ramp.points.map(q => `${fx(q.atSource)}s ${fx(q.speed)}×`).join("<br>")}</span>` : `${fx(s.speed, 2)}×`}</td>
+          <td class="small">${esc(s.tin)} → ${esc(s.tout)}${s.outDur ? ` <span class="muted">${fx(s.outDur)} s</span>` : ""}</td>
+          <td class="small">${esc(s.role)}</td>
+          <td class="small"><span class="mono">Track ${fx(mc.s0 + s.ts)}</span><br><span class="${al.onGrid ? "" : "warn"}">${esc(al.label)}</span>${s.musicalMoment ? `<br><span class="muted">${esc(s.musicalMoment)}</span>` : ""}</td>
+          <td class="small reason">${esc(s.reason)}${s.ramp?.reason ? `<br><span class="muted">Ramp: ${esc(s.ramp.reason)}</span>` : ""}</td></tr>`; }).join("")}
+      </tbody></table></div>
+      <p class="small muted">Source-Leiste: grau nutzbar, blau stärkster Bereich, rot schraffiert schwach, Balken = genutzter Bereich inkl. Übergangs-Handles. Musik: Position im Track und worauf der Schnitt fällt (vom Code aus der Musik-Analyse bestimmt), darunter Claudes Absicht.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-val">
+      <div class="row between"><h2 id="h-val">Validation</h2><span class="small ${val.passed ? "ok" : "bad"}">${val.passed ? "Alle harten Regeln erfüllt" : `${val.errors.length} Fehler nach ${run.attempts.length - 1} Korrekturrunde${run.attempts.length === 2 ? "" : "n"}`}</span></div>
+      <div class="checks">${val.checks.map(c => `<div class="check">${pill(c.status)}<div><b>${esc(c.label)}</b>${c.items.length ? `<ul>${c.items.map(x => `<li class="p-${x.level}">${esc(x.msg)}</li>`).join("")}</ul>` : ""}</div></div>`).join("")}</div>
+      ${p.corrections.length ? `<details><summary>Rechenkorrekturen durch den Code (${p.corrections.length})</summary><ul class="small">${p.corrections.map(c => `<li>${c.shot ? `Shot ${c.shot}: ` : ""}${esc(c.msg)}</li>`).join("")}</ul></details>` : ""}
+      <details><summary>Verlauf: Erzeugung und Korrekturrunden</summary><ul class="small">${run.attempts.map((a, i) => `<li>${i ? `Korrektur ${i}` : a.kind === "regenerate" ? "Regenerate" : "Erster Plan"} · ${fmtDate(a.at)} · ${Math.round((a.ms || 0) / 1000)} s · ${a.errors} Fehler, ${a.warnings} Hinweise${a.errorList?.length ? `<br><span class="muted">${a.errorList.map(esc).join("<br>")}</span>` : ""}</li>`).join("")}</ul></details>
+    </section>
+
+    <section class="panel" aria-labelledby="h-exp">
+      <div class="row between"><h2 id="h-exp">Export</h2><div class="row"><button class="primary" data-act="export" ${S.downloads ? "" : "disabled title=\"Download ist in dieser Ansicht nicht verfügbar\""}>Export Edit Plan JSON</button><button data-act="copy">Copy JSON</button></div></div>
+      <p class="small muted">Enthält meta, music, style, timeline, shots, validation und summary. Keine UI-Daten, kein Shotstack-Edit, kein Render. Speed-Ramps sind zusätzlich als Teilstücke mit konstanter Geschwindigkeit angegeben (<span class="mono">speedRamp.segments</span>), die ein Builder direkt als Clips umsetzen kann.</p>
+      <p class="small muted" id="export-note" hidden></p>
+      <textarea id="export-fallback" rows="8" aria-label="Plan-JSON zum manuellen Kopieren" readonly hidden></textarea>
+      <details><summary>Debug</summary><div class="kv" style="margin-top:8px">
+        <span class="muted">Regeln</span><span class="mono">${esc(RULES_VERSION)}</span>
+        <span class="muted">Prompt</span><span>${(run.promptBytes / 1024).toFixed(1)} KB · Stufe complex</span>
+        <span class="muted">Clip-Analyse</span><span class="mono small">${esc(cs.source.schema)} · Set ${esc(cs.source.setName)} · Vergleich ${esc(cs.source.comparisonId)} · exportiert ${fmtDate(cs.source.exportedAt)}</span>
+        <span class="muted">Musik-Analyse</span><span class="mono small">${esc(run.music.source.schema)} · ${esc(run.music.trackId)} · analysiert ${fmtDate(run.music.source.analyzedAt)}</span>
+        <span class="muted">Sichere Bereiche</span><span class="mono small">${cs.clips.map(c => `${c.ref} ${esc(c.filename)} ${c.safe.join("–")} s`).join(" · ")}</span>
+      </div>${run.attempts.map((a, i) => `<details><summary>Rohantwort ${i ? `Korrektur ${i}` : "Plan"}</summary><pre>${esc(a.raw)}</pre></details>`).join("")}</details>
+    </section>`;
+  }
+
+  // ---------- boot ----------
+  async function boot() {
+    for (const kind of ["clip", "music"]) { const t = store.get(kind); if (t) { const nm = store.get(kind + "Name") || ""; try { const j = JSON.parse(t); S[kind] = kind === "clip" ? readClipExport(j) : readMusicExport(j); S[kind + "Name"] = nm; } catch {} } }
+    if (S.music?.data && !sectionOf(S.music.data, S.secKey)) S.secKey = "selected";
+    restoreRun(); render();
+    const use = n => (window.claude?.use ? window.claude.use(n).catch(() => null) : Promise.resolve(null));
+    [S.sample, S.downloads] = await Promise.all([use("sample"), use("downloads")]);
+    const chip = (id, ok, label) => { const el = $(id); el.className = "chip " + (ok ? "on" : "off"); el.lastChild.textContent = label; };
+    chip("cap-sample", !!S.sample, S.sample ? "Claude" : "Claude fehlt"); chip("cap-dl", !!S.downloads, S.downloads ? "Download" : "Download fehlt");
+    if (!S.sample) { $("nocaps").hidden = false; $("nocaps").textContent = "Ohne Claude kann kein Plan erzeugt werden. Öffne die Seite in claude.ai."; }
+    render();
+  }
+  boot();
+})();
+</script>
