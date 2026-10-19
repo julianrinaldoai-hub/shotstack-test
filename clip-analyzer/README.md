@@ -36,6 +36,21 @@ Nicht enthalten: Musik, Schnittplan, Timeline, Clip-Reihenfolge, Shotstack und R
      - Frame-Timeline mit Vorschaubildern
      - Debug-Angaben: analysierte Zeitpunkte, fehlende Frames, Zeitpunkt der Analyse, Vollständigkeit
 
+## Export
+
+- **Bedienung:** „Export JSON“ lädt den finalen Stand des Sets als Datei herunter (`clip-analysis-<set>-<datum>.json`). „Copy JSON“ kopiert dieselbe Struktur in die Zwischenablage.
+- **Voraussetzung:** Beides geht erst nach einem Vergleich (Phase 2).
+- **Stand:** Exportiert wird der Stand des **letzten Vergleichs**: die dort verwendeten Analyse-Versionen plus die finalen Phase-2-Werte. Gibt es neuere Einzelanalysen, steht `meta.comparisonCoversLatestAnalyses: false` im JSON, und die Seite zeigt einen Hinweis.
+- **Struktur** (`schema: clip-analysis-export@1`):
+  - **`meta`:** setId, setName, createdAt, numberOfClips, analysisVersion, comparisonId, comparedAt
+  - **`property`:** Übersicht, Verkaufsfaktoren, ähnliche Clips
+  - **`ranking`:** finale Rangfolge
+  - **`groups`:** primary (A/B), secondary (C), optional (D), avoid (E)
+  - **`clips[]`:** alle Analysefelder pro Clip
+    - Die Gewichte (`contentWeight`, `editingPriority`, `screenTimePriority`, `priorityClass`, `finalScore`, Screentime) sind die finalen aus Phase 2.
+    - Die Phase-1-Werte stehen separat unter `phase1`.
+- **Nicht enthalten:** Bilder, Frames, Videos, Datei-Links und UI-Daten.
+
 ## Plausibilitätsprüfung (Code, keine KI)
 
 Jede Karte listet Widersprüche in Claudes Antwort, damit sich die Zuverlässigkeit beurteilen lässt:

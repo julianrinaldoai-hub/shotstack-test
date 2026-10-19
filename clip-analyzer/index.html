@@ -185,9 +185,11 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
   <section class="panel" aria-labelledby="h-results">
     <div class="row between">
       <h2 id="h-results">3 · Results</h2>
-      <span class="small muted" id="cmp-meta"></span>
+      <div class="row"><span class="small muted" id="cmp-meta"></span><button id="btn-export" disabled>Export JSON</button><button id="btn-copy" disabled>Copy JSON</button></div>
     </div>
     <div id="summary"></div>
+    <p class="small muted" id="export-note" hidden></p>
+    <textarea id="export-fallback" aria-label="Export-JSON zum Kopieren" readonly hidden style="width:100%;min-height:160px;font-family:var(--f-mono);font-size:0.75rem;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);padding:8px"></textarea>
     <div class="cards" id="cards"></div>
   </section>
 </div>
@@ -717,6 +719,71 @@ Include every key exactly once.`;
     </article>`;
   }
 
+  // ---------- export (read-only: final state of the latest comparison, no UI data, no images) ----------
+  const EXPORT_SCHEMA = "clip-analysis-export@1";
+  const GROUP_OF = { A: "primary", B: "primary", C: "secondary", D: "optional", E: "avoid" };
+  function buildExport() {
+    const cmp = currentCmp(); if (!cmp) return null;
+    const set = S.sets.find(x => x.id === S.setId) || {}, nameOf = id => S.clips.find(c => c.id === id)?.filename || null;
+    const clips = (cmp.ranking || []).map((cid, i) => {
+      const c = S.clips.find(x => x.id === cid), a = (S.analyses[cid] || []).find(x => x.id === cmp.analysisIds?.[cid]), f = cmp.clips?.[cid];
+      if (!c || !a?.result || !f) return null;
+      const r = a.result, D = +(a.debug?.durationMeasured || c.duration || 0);
+      return {
+        rank: i + 1, key: f.key || cmp.keys?.[cid] || null, clipId: cid, filename: c.filename, duration: D, sizeBytes: c.size ?? null, width: c.width ?? null, height: c.height ?? null,
+        analysis: { analysisId: a.id, version: a.version, analyzedAt: a.createdAt, complete: !!a.debug?.complete, framesAnalyzed: a.debug?.loaded ?? null, framesRequested: a.debug?.requested ?? null, frameStep: a.debug?.step ?? null, modelTier: a.debug?.modelTier || null },
+        sceneType: r.sceneType ?? null, roomType: r.roomType ?? null, shortDescription: r.shortDescription ?? null,
+        propertyImportance: r.propertyImportance ?? null, viewerInterest: r.viewerInterest ?? null, visualStrength: r.visualStrength ?? null,
+        // final values after phase 2 (comparison of all clips); phase-1 values kept separately below
+        contentWeight: f.contentWeight ?? null, editingPriority: f.editingPriority ?? null, screenTimePriority: f.screenTimePriority ?? null, priorityClass: f.priorityClass ?? null,
+        finalScore: f.finalScore ?? null, group: GROUP_OF[f.priorityClass] || null, heroPotential: r.heroPotential ?? null,
+        usableStart: r.usableStart ?? null, usableEnd: r.usableEnd ?? null, strongestStart: r.strongestStart ?? null, strongestEnd: r.strongestEnd ?? null,
+        weakStart: r.weakStart ?? null, weakEnd: r.weakEnd ?? null, movementGoodFrom: r.movementGoodFrom ?? null, perspectiveWorseFrom: r.perspectiveWorseFrom ?? null,
+        recommendedRole: r.preferredRole ?? null, recommendedRoles: r.recommendedRoles || [],
+        recommendedMinScreenTime: f.recommendedMinScreenTime ?? r.recommendedMinScreenTime ?? null, recommendedMaxScreenTime: f.recommendedMaxScreenTime ?? r.recommendedMaxScreenTime ?? null,
+        recommendedPlayback: r.recommendedPlayback ?? null, playbackReason: r.playbackReason ?? null, cameraMovement: r.cameraMovement ?? null,
+        weaknesses: [r.weakStart && `start ${r.weakStart.from}-${r.weakStart.to}s: ${r.weakStart.reason}`, r.weakEnd && `end ${r.weakEnd.from}-${r.weakEnd.to}s: ${r.weakEnd.reason}`, ...(r.weaknesses || [])].filter(Boolean),
+        detectedProblems: r.issues || [], segments: r.segments || [], frameNotes: r.frames || [], hardCuts: a.metrics?.cuts || [],
+        bestUseSummary: r.bestUseSummary ?? null, screenTimeReason: r.screenTimeReason ?? null, weightReason: r.weightReason ?? null, confidence: r.confidence ?? null, uncertainties: r.uncertainties ?? null,
+        comparison: { uniqueness: f.uniqueness ?? null, similarTo: (f.similarTo || []).map(id => ({ clipId: id, filename: nameOf(id) })), relativeReason: f.relativeReason ?? null, changeFromPhase1: f.changeFromPhase1 ?? null, missingInComparison: !!f.missing },
+        phase1: { contentWeight: r.contentWeight ?? null, editingPriority: r.editingPriority ?? null, screenTimePriority: r.screenTimePriority ?? null, priorityClass: r.priorityClass ?? null, recommendedMinScreenTime: r.recommendedMinScreenTime ?? null, recommendedMaxScreenTime: r.recommendedMaxScreenTime ?? null },
+        plausibilityChecks: checks(r, D, f)
+      };
+    }).filter(Boolean);
+    const brief = c => ({ rank: c.rank, clipId: c.clipId, filename: c.filename, roomType: c.roomType, priorityClass: c.priorityClass, finalScore: c.finalScore });
+    const versions = [...new Set(clips.map(c => c.analysis.version))].sort((x, y) => x - y);
+    return {
+      meta: { schema: EXPORT_SCHEMA, exportedAt: new Date().toISOString(), source: { artifact: "Clip-Gewichtung", url: "https://claude.ai/artifact/WpNHWC3FN8Y7t93BWRAaYi" },
+        setId: S.setId, setName: set.name || null, createdAt: set.createdAt || null, numberOfClips: clips.length,
+        analysisVersion: versions.length === 1 ? versions[0] : versions, comparisonId: cmp.id, comparedAt: cmp.createdAt, comparisonModelTier: cmp.modelTier || null,
+        comparisonCoversLatestAnalyses: cmpFresh(cmp), clipsWithoutComparison: S.clips.filter(c => !(cmp.ranking || []).includes(c.id)).map(c => c.filename) },
+      property: { overview: cmp.overview || "", sellingPoints: cmp.sellingPoints || [], similarGroups: (cmp.similarGroups || []).map(g => ({ note: g.note, clips: (g.clips || []).map(id => ({ clipId: id, filename: nameOf(id) })) })) },
+      ranking: clips.map(brief),
+      groups: { primary: clips.filter(c => c.group === "primary").map(brief), secondary: clips.filter(c => c.group === "secondary").map(brief), optional: clips.filter(c => c.group === "optional").map(brief), avoid: clips.filter(c => c.group === "avoid").map(brief) },
+      clips
+    };
+  }
+  const exportName = d => `clip-analysis-${String(d.meta.setName || d.meta.setId || "set").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${d.meta.exportedAt.slice(0, 10)}.json`;
+  function exportNote(msg) { const n = $("export-note"); n.hidden = !msg; n.textContent = msg || ""; }
+  async function initExport() {
+    S.downloads = window.claude?.use ? await window.claude.use("downloads").catch(() => null) : null;
+    const refresh = () => { const cmp = currentCmp(); $("btn-export").disabled = !cmp || !S.downloads; $("btn-copy").disabled = !cmp; $("btn-export").title = !S.downloads ? "Download ist in dieser Ansicht nicht verfügbar. Copy JSON nutzen." : !cmp ? "Erst nach einem Vergleich (Phase 2) möglich." : ""; };
+    refresh(); new MutationObserver(refresh).observe($("cmp-meta"), { childList: true, characterData: true, subtree: true });
+  }
+  $("btn-export").addEventListener("click", async () => {
+    const d = buildExport(); if (!d) return;
+    if (!d.meta.comparisonCoversLatestAnalyses) exportNote("Hinweis: Es gibt neuere Einzelanalysen als den letzten Vergleich. Exportiert wird der Stand des letzten Vergleichs; für den neuesten Stand erst „Vergleich neu“.");
+    try { await S.downloads.save({ filename: exportName(d), data: JSON.stringify(d, null, 2) }); log(`${exportName(d)} exportiert (${d.meta.numberOfClips} Clips).`, "ok"); }
+    catch (e) { if (e?.code === "declined") log("Export abgebrochen."); else log(`Export nicht möglich (${e?.code || e}). Copy JSON nutzen.`, "warn"); }
+  });
+  $("btn-copy").addEventListener("click", () => {
+    const d = buildExport(); if (!d) return;
+    const text = JSON.stringify(d, null, 2), ta = $("export-fallback");
+    navigator.clipboard.writeText(text).then(() => { ta.hidden = true; exportNote(`JSON kopiert (${d.meta.numberOfClips} Clips, ${(text.length / 1024).toFixed(1)} KB).`); },
+      () => { ta.value = text; ta.hidden = false; ta.focus(); ta.select(); exportNote("Kopieren wurde blockiert. Das JSON ist unten markiert: mit Strg/Cmd+C kopieren."); });
+  });
+
   boot();
+  initExport();
 })();
 </script>
