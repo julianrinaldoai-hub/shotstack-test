@@ -73,9 +73,58 @@ Für den Plan rechnet der Code den gewählten Abschnitt in **Videozeit** um: Tra
    - Speed-Rechnung stimmt, Speed bleibt in 0,5–2,0 und passt zu `recommendedPlayback`, Speed-Ramps sind begrenzt und begründet
    - Übergänge erlaubt, auf beiden Seiten gleich, höchstens 40 % der Shot-Länge, Anzahl passend zum Style
    - Musik-Sync: jeder Schnitt auf Beat, Downbeat, Drop oder Section-Wechsel
-4. **Korrektur:** Bei Fehlern bekommt Claude die Fehler- und Hinweisliste und liefert einen korrigierten Plan. Das geht höchstens zweimal. Bleiben danach Fehler, ist der Plan als „nicht bestanden“ markiert.
+4. **Kreative Prüfung (Code, Regeln v2):** Wirkt der Schnitt wie von einem Menschen? Punkte mit „repair“ gehen zurück an Claude:
+   - Taktraster: mindestens 60 % der Shots genau 1, 2 oder mehr Takte lang, sichtbar wiederkehrende Shot-Längen, oder fast jeder Taktanfang hat einen Schnitt
+   - kein starker Selling Point in den ersten 6 s (Klasse A, Rang 1–2 oder starker B-Raum)
+   - eine zweite Verwendung mit mehr als 40 % Source-Overlap, oder eine Wiederholung eines statischen Clips
+   - Screentime über recommendedMax (Nebenclips sofort, A/B ab 1,25× + 0,2 s); Nebenclips über 25 % des Videos
+   - Speed entgegen der Analyse: bei „normal“ über ±25 %, oder über ±10 % ohne `speedReason`
+   - sichtbares Artefakt (artifact, morph, warp …) im genutzten Bereich
+   - Video kürzer als etwa 23 s
+   - Reverse: mehr als etwa 2 Reverse-Shots, mehr als ein Richtungswechsel pro Shot, Wechsel ohne Turnaround, ohne Begründung, oder auf Material, bei dem die Analyse Wasser, Menschen, Vorhänge oder Ähnliches nennt bzw. Artefakte oder Lichtprobleme meldet
+5. **Korrektur:** Bei Fehlern oder kreativen Punkten bekommt Claude die Listen (Fehler, kreative Punkte, Hinweise) und liefert einen verbesserten Plan.
+   - höchstens 3 Runden
+   - eine Runde ohne Verbesserung beendet die Schleife
+   - verwendet wird der beste Plan (Fehler vor kreativen Punkten vor Hinweisen), nicht automatisch der letzte
+   - was danach offen bleibt, ist markiert: „technisch bestanden, kreativ offen“ oder „nicht bestanden“
+
+Die technische Prüfung (Schritt 3) ist gegenüber Regeln v1 unverändert. Sie liest den Source-Bereich jetzt aus allen Segmenten eines Shots, damit sie auch Reverse-Shots prüft.
 
 **Regenerate Plan** gibt Claude den vorherigen Plan mit. Ein neuer Plan darf ähnlich sein, wenn der alte gut zur Musik passt.
+
+## Schnittlogik (Regeln v2)
+
+Priorität: 1 Zuschauerinteresse, 2 starke Immobilie zeigen, 3 visueller Flow, 4 musikalischer Flow, 5 Style, 6 technisches Raster.
+
+- **Marker statt Raster:** Musikmarker sind Orientierung. Ein Shot darf mitten im Takt auf einem Beat beginnen, mehrere Takte überspannen oder einen Marker überspringen.
+- **Shot-Längen:** variieren natürlich, ohne erkennbares Muster.
+- **Selling Point früh:** ein sehr starker Clip in den ersten 3–6 s.
+- **Auslassen:** Clips dürfen wegfallen; Nebenräume bleiben weg, wenn sie das Video nicht besser machen.
+- **Länge:** 23 s bis Abschnittsende. Lieber kürzer als mit Wiederholungen füllen. Die Musik läuft dann am Stück und blendet am Videoende aus.
+- **Wiederholung:** nur mit klar anderem Bereich (höchstens ca. 35–40 % Overlap), nie bei statischen oder Nebenclips.
+- **Speed:** `recommendedPlayback` gilt. Abweichungen nur mit `speedReason`.
+
+### Reverse und Richtungswechsel
+
+- **Reverse-Shot:** `playback: {direction: "reverse", speed}`; sourceStart liegt über sourceEnd.
+- **Richtungswechsel:** `segments: [{sourceStart, sourceEnd, direction, speed, timelineStart, timelineEnd, turnaroundIn, turnaroundOut}]` und `turnaround: {enabled, type: "smooth-speed-ramp", minSpeed: 0, duration}`.
+  - Beim Turnaround fällt die Geschwindigkeit linear auf 0 und steigt in Gegenrichtung wieder an, standardmäßig 0,25 s auf jeder Seite.
+  - Fehlt die Angabe, setzt der Code den weichen Turnaround und protokolliert das.
+- **Nur gute Bereiche:** Auch Reverse muss im sicheren Bereich bleiben. Es dreht am Ende des guten Bereichs und fährt nie erst in einen schlechten Bereich hinein.
+- **Zeitrechnung:** Segmentdauer = |Span| / Speed + halbe Turnaround-Zeit je Seite. Der Code berechnet daraus das letzte Source-Ende.
+
+### Technische Umsetzbarkeit (geprüft 19.10.2026)
+
+- **Shotstack Edit API:** Das `speed` eines Video-Assets darf ein Tween-Array sein.
+  - Laut Shotstack-Doku ändert sich die Geschwindigkeit zwischen Tweens linear, 0 friert das Bild ein, und ein negativer Wert spielt ab `trim` rückwärts.
+  - Ein konstanter `speed` als Zahl ist auf 0–10 begrenzt; Reverse braucht deshalb immer das Array.
+  - Ein Richtungswechsel mit Turnaround ist so in **einem** Clip abbildbar: 1 → 0 → −1.
+- **Pro Shot im Export:** `builder: {trim, speed}` mit genau diesen Tweens. Für einen Reverse-Shot ist das `[{from: -1, to: -1, start: 0, length}]`.
+  - Der Code hat geprüft, dass die Tweens über die Zeit integriert auf denselben Source-Frame führen wie der Plan.
+- **Noch offen:**
+  - Es gibt noch keinen Builder, der `video-director-plan@1` liest (`meta.playbackSupport.reverse.videoDirectorBuilder: "not implemented yet"`).
+  - Reverse ist noch nicht durch einen Test-Render bestätigt (`verifiedByTestRender: false`).
+  - Reverse wird nicht stillschweigend durch eine andere Bewegung ersetzt.
 
 ## Export (`schema: video-director-plan@1`)
 
@@ -90,18 +139,20 @@ Dateiname: `edit-plan-<style>-<track>-<datum>.json`. „Copy JSON“ kopiert das
   - Timeline: `timelineStart`, `timelineEnd`, `duration`, `playbackSpeed`
   - **`speedRamp`:** Punkte `atSource` und `speed`, Begründung, `segments`. Die Segmente sind Teilstücke mit konstanter Geschwindigkeit, die ein Builder als einzelne Clips umsetzen kann.
   - Übergänge: `transitionIn`, `transitionOut` und ihre Dauern, `sourceHandleBefore`, `sourceHandleAfter`
+  - Wiedergabe: `playback` (direction, speed), `segments`, `turnaround`, `speedReason`, `builder` (Shotstack-trim und -speed), `sourceRange` (der insgesamt genutzte Bereich)
   - Inhalt: `role`, `reason`
   - **`music`:** `absoluteTrackStart`, `absoluteTrackEnd`, `relativeVideoStart`, `relativeVideoEnd`, `alignedTo` (vom Code bestimmt), `musicalMoment` (Claudes Absicht)
-- **`validation`:** passed, alle Prüfungen mit Einträgen, Rechenkorrekturen des Codes
+- **`validation`:** passed, alle technischen Prüfungen mit Einträgen, Rechenkorrekturen des Codes und `creativeReview` (ok, offene Punkte, Notizen)
 - **`summary`:**
   - Style, Track, Abschnitt, Videolänge
   - Shots, genutzte, wiederholte und ausgelassene Clips (mit Begründung), Hero-Clips
   - Screentime pro Clip mit Empfehlung
-  - Dramaturgie, Schnittkonzept, kreative Erklärung, Director-Analyse
+  - Reverse-Shots, Shot-Längen, Zeitpunkt des ersten starken Selling Points
+  - Dramaturgie, Schnittkonzept, Selbstkritik, kreative Erklärung, Director-Analyse
 
 Keine UI-Daten, keine Medien, keine Datei-Links.
 
 ## Aufwand
 
-- Ein Claude-Aufruf pro Plan, dazu höchstens zwei Korrekturaufrufe. Sie laufen über das Claude-Konto des Viewers.
+- Ein Claude-Aufruf pro Plan, dazu höchstens drei Korrekturaufrufe. Bringt eine Runde keine Verbesserung, ist früher Schluss. Sie laufen über das Claude-Konto des Viewers.
 - Shotstack wird nicht verwendet.
