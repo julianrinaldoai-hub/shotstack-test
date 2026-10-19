@@ -184,7 +184,7 @@ textarea { width: 100%; font-family: var(--f-mono); font-size: 12px; border: 1px
 
 <script>
 // ===== CORE-BEGIN: pure functions (no AI, no DOM): read inputs, music context, normalise and validate a plan, build the export =====
-const FPS = 25, FRAME = 1 / FPS, RULES_VERSION = "video-director-rules/3 · 2026-10-19", ARTIFACT_URL = "https://claude.ai/artifact/TKVkmNaT5VhMdBe3PUdnQs";
+const FPS = 25, FRAME = 1 / FPS, RULES_VERSION = "video-director-rules/4 · 2026-10-19", ARTIFACT_URL = "https://claude.ai/artifact/TKVkmNaT5VhMdBe3PUdnQs";
 const r3 = x => Math.round(x * 1000) / 1000;
 const num = x => (typeof x === "number" && isFinite(x)) ? x : (x != null && x !== "" && isFinite(+x) ? +x : null);
 const sum = a => a.reduce((s, x) => s + x, 0);
@@ -556,8 +556,12 @@ const STRONG_ROOMS = /exterior|facade|fassade|building|living|wohn|dining|ess|ki
 const ARTIFACT = /artifact|artefakt|morph|warp|distort|verzerr|flicker|flacker|glitch/i;
 const REVERSE_RISK = /pool|wasser|water|brunnen|fountain|meer|\bsea\b|\blake\b|fluss|river|wave|welle|regen|rain|person|people|mensch|frau|mann|kind|tier|\bhund\b|dog|katze|cat|vorhang|curtain|rauch|smoke|feuer|fire|flamme|blätter|leaves|wind/i;
 const isStrong = c => c.priorityClass === "A" || c.rank <= 2 || (c.priorityClass === "B" && (c.contentWeight ?? 0) >= 7.5 && STRONG_ROOMS.test(c.roomType));
-function reviewPlan(p, clipSet, mc, styleId) {
+const artifactShare = c => { const span = Math.max(1e-6, c.safe[1] - c.safe[0]); return sum(c.problems.filter(p => ARTIFACT.test(p.type + " " + p.note)).map(p => overlap(p.from, p.to, c.safe[0], c.safe[1]))) / span; };
+const byIdList = (list, key = "clip") => Object.fromEntries((Array.isArray(list) ? list : []).filter(x => x && x[key]).map(x => [x[key], String(x.reason || "").trim()]));
+function reviewPlan(p, clipSet, mc, styleId, ai = {}) {
   const items = [], add = (id, level, msg, shot) => items.push({ id, level, msg, ...(shot ? { shot } : {}) });
+  const filler = new Set(ai.directorAnalysis?.fillerClips || []), keptSecondary = byIdList(ai.summary?.keptSecondary), overrides = byIdList(ai.summary?.screenTimeOverrides);
+  const secondReverseWhy = String(ai.summary?.secondReverseJustification || "").trim();
   const S = p.shots, n = S.length, bar = mc.barLen || 2, cuts = S.slice(1).map(s => s.ts);
   // 1/2 grid mechanics: shot lengths as whole bars, repeating lengths, a cut on (almost) every bar start
   const isBarMultiple = d => { const k = Math.round(d / bar); return k >= 1 && Math.abs(d - k * bar) <= 0.06; };
@@ -568,8 +572,8 @@ function reviewPlan(p, clipSet, mc, styleId) {
   if (top && n >= 6 && top.n >= 3 && top.n / n >= 0.35) add("repeated-lengths", "repair", `${top.n} von ${n} Shots sind ${fx3(top.d)} s lang. Die Shot-Längen wiederholen sich sichtbar.`);
   const onBar = cuts.filter(t => mc.bars.some(b => Math.abs(b.t - t) <= 2 * FRAME)).length, barsIn = mc.bars.filter(b => b.t > 0.1 && b.t < p.videoDuration - 0.1).length;
   if (cuts.length >= 6 && onBar / cuts.length >= 0.8 && barsIn && onBar / barsIn >= 0.7) add("cut-every-bar", "repair", `${onBar} von ${cuts.length} Schnitten liegen auf Taktanfängen, und ${Math.round(onBar / barsIn * 100)} % aller Taktanfänge haben einen Schnitt. Nicht jeder Takt braucht einen Cut.`);
-  // 5 shorter is fine, but not below about 23 s
-  if (p.videoDuration < 22.5) add("too-short", "repair", `Das Video ist nur ${fx3(p.videoDuration)} s lang; das Minimum liegt bei etwa 23 s. Mit Reverse-Turnarounds oder einem längeren Hero Shot verlängern statt mit Wiederholungen.`);
+  // 5 about 23 s is the target, not a duty: below 22.5 s it is a point, unavoidable when the strong material does not carry more
+  if (p.videoDuration < 22.5) add("too-short", "repair", `Das Video ist ${fx3(p.videoDuration)} s lang; Ziel sind etwa 23 s. Länger nur mit starkem Material (längerer Hero Shot, sauberer Bereich), nie mit Füllstoff, Wiederholungen oder Reverse nur für Länge.`);
   // 3 a strong selling point early
   const early = S.find(s => s.clip && isStrong(s.clip) && s.ts < 6 && Math.min(s.te, 6.5) - s.ts >= 0.8);
   if (n && !early) add("early-selling-point", "repair", `In den ersten 6 s ist kein starker Selling Point zu sehen (stark: ${clipSet.clips.filter(isStrong).map(c => `${c.filename} ${c.roomType}`).join(", ")}).`);
@@ -584,7 +588,14 @@ function reviewPlan(p, clipSet, mc, styleId) {
   const tot = c => sum((byClip[c.ref] || []).map(s => s.dur));
   for (const c of clipSet.clips) { const t = tot(c); if (!t || c.maxScreen == null) continue;
     if ("CDE".includes(c.priorityClass) && t > c.maxScreen + 0.1) add("secondary-screen-time", "repair", `${c.filename} (Klasse ${c.priorityClass}, ${c.roomType}): ${fx3(t)} s, empfohlen höchstens ${c.maxScreen} s.`);
-    else if (t > c.maxScreen * 1.25 + 0.2) add("over-max", "repair", `${c.filename}: ${fx3(t)} s, deutlich über recommendedMax (${c.maxScreen} s).`); }
+    else if (t > c.maxScreen * 1.5 + 0.05) add("over-max", "repair", `${c.filename}: ${fx3(t)} s, ${Math.round((t / c.maxScreen - 1) * 100)} % über recommendedMax (${c.maxScreen} s). Kürzen.`);
+    else if (t > c.maxScreen * 1.2 + 0.05 && !overrides[c.ref]) add("over-max", "repair", `${c.filename}: ${fx3(t)} s, ${Math.round((t / c.maxScreen - 1) * 100)} % über recommendedMax (${c.maxScreen} s), ohne starken kreativen Grund. Shot kürzen.`);
+    else if (t > c.maxScreen * 1.2 + 0.05) add("over-max-reason", "note", `${c.filename}: ${fx3(t)} s, ${Math.round((t / c.maxScreen - 1) * 100)} % über recommendedMax, begründet: ${overrides[c.ref]}`); }
+  // filler goes: the director's own filler list, and secondary clips without a stated reason
+  for (const c of clipSet.clips) { if (!tot(c)) continue;
+    if (filler.has(c.ref)) add("filler", "repair", `${c.filename} (${c.roomType}) ist laut eigener Director-Analyse Füllstoff, wird aber verwendet. Weglassen.`);
+    else if ("CDE".includes(c.priorityClass) && !keptSecondary[c.ref]) add("filler", "repair", `${c.filename} (Klasse ${c.priorityClass}, ${c.roomType}) wird ohne Begründung verwendet. Nebenclips bleiben standardmäßig weg, außer sie machen das Video klar besser (summary.keptSecondary).`);
+    if (artifactShare(c) >= 0.7 && c.priorityClass !== "A") add("artifact-clip", "repair", `${c.filename} hat ein sichtbares Artefakt über ${Math.round(artifactShare(c) * 100)} % seines nutzbaren Bereichs und ist nicht essenziell. Weglassen, auch nicht als Bridge.`); }
   const sec = sum(clipSet.clips.filter(c => "CDE".includes(c.priorityClass)).map(tot));
   if (p.videoDuration && sec / p.videoDuration > 0.25) add("secondary-share", "repair", `Nebenclips (C–E) füllen ${Math.round(sec / p.videoDuration * 100)} % des Videos. Lieber weglassen oder kürzer.`);
   // 8 playback speed respects the analysis
@@ -592,11 +603,13 @@ function reviewPlan(p, clipSet, mc, styleId) {
     if (c.playback === "normal" && !s.ramp && dev > 0.25) add("speed-vs-analysis", "repair", `Shot ${s.shotNumber} (${c.filename}): ${s.segs.map(g => g.v).join(" / ")}×, die Analyse empfiehlt normal. Mehr als ±25 % nur mit sehr starkem Grund.`, s.shotNumber);
     else if (c.playback === "normal" && (dev > 0.1 || s.ramp) && !s.speedReason) add("speed-reason", "repair", `Shot ${s.shotNumber} (${c.filename}): Speed geändert ohne kreativen Grund (speedReason fehlt), die Analyse empfiehlt normal.`, s.shotNumber); }
   // visible artefacts in the used range
-  for (const s of S) { const c = s.clip; if (!c) continue;
+  for (const s of S) { const c = s.clip; if (!c || (artifactShare(c) >= 0.7 && c.priorityClass !== "A")) continue;
     for (const pr of c.problems) if (ARTIFACT.test(pr.type + " " + pr.note) && overlap(s.a, s.b, pr.from, pr.to) > 0.02) add("artifact", "repair", `Shot ${s.shotNumber} (${c.filename}): sichtbares Artefakt „${pr.type}“ ${pr.from}–${pr.to} s im genutzten Bereich. Vermeiden, wenn der Edit ohne diesen Clip auskommt.`, s.shotNumber); }
   // reverse: purposeful, rare, smooth, only on suitable footage
-  const rev = S.filter(s => s.segs.some(g => g.dir < 0)), revMax = Math.max(2, Math.round(n / 5));
-  if (rev.length > revMax) add("reverse-count", "repair", `${rev.length} Shots mit Reverse bei ${n} Shots. Reverse ist ein Werkzeug, kein Standard (höchstens etwa ${revMax}).`);
+  const rev = S.filter(s => s.segs.some(g => g.dir < 0)), turns = S.filter(s => s.segs.length > 1);
+  if (rev.length > 2) add("reverse-count", "repair", `${rev.length} Shots mit Reverse. Reverse ist ein Spezialwerkzeug, kein Standard (höchstens 2, davon eine prominente Forward→Reverse-Sequenz).`);
+  if (turns.length > 2 || (turns.length === 2 && !secondReverseWhy)) add("second-turnaround", "repair", `${turns.length} Forward→Reverse-Sequenzen (Shots ${turns.map(s => s.shotNumber).join(", ")}). Normalerweise reicht eine prominente; eine zweite nur, wenn sie visuell klar anders wirkt und die Musik sie stark trägt (summary.secondReverseJustification), nie für Länge.`, turns[1]?.shotNumber);
+  else if (turns.length === 2) add("second-turnaround", "note", `Zweite Forward→Reverse-Sequenz begründet: ${secondReverseWhy}`);
   for (const s of rev) { const c = s.clip; if (!c) continue;
     const txt = [c.roomType, c.sceneType, c.description, c.camera?.note, ...c.segments.map(x => x.note), ...c.problems.map(x => x.note)].join(" ");
     const risk = txt.match(REVERSE_RISK);
@@ -623,24 +636,27 @@ const FIX = {
   "reuse-overlap": "Drop the second use, or use a range with at most 35 % overlap.",
   "reuse-static": "Use the static clip only once.",
   "secondary-screen-time": "Shorten the secondary clip or leave it out.",
-  "over-max": "Shorten, use the clip once, give the time to other strong clips, or make the video shorter.",
+  "over-max": "Shorten the clip to at most about recommendedMax +20 % (a turnaround does not justify more), or give a strong creative reason in summary.screenTimeOverrides.",
   "secondary-share": "Leave secondary clips out or keep them very short.",
   "speed-vs-analysis": "Set speed 1.0 (the analysis says normal).",
   "speed-reason": "Set speed 1.0, or give a real creative reason in speedReason.",
   "artifact": "Leave the clip out or use a range without the artefact.",
-  "too-short": "Extend with a longer hero shot or a reverse turnaround, never with repeats.",
+  "too-short": "Only if strong material allows: a longer hero shot or a cleaner range. Never filler, repeats or reverse just for length; a shorter video is fine.",
+  "filler": "Leave this clip out. Keep a secondary clip only if it clearly improves the video and say why in summary.keptSecondary.",
+  "artifact-clip": "Leave the clip out completely; not even as a bridge.",
+  "second-turnaround": "Keep one forward->reverse hero; turn the other into a plain forward shot or shorten it, or justify it in summary.secondReverseJustification if it is visually clearly different and the music strongly carries it.",
   "reverse-count": "Keep reverse for the one or two shots where it helps most.",
   "reverse-risk": "No reverse on this clip.", "reverse-artifact": "No reverse on this clip.",
   "boomerang": "At most one direction change per shot.", "hard-turn": "Set turnaround.enabled = true.", "reverse-reason": "Give speedReason or play forward."
 };
-// clean material without repeats: per clip its safe range capped by the recommended screen time; the two push-ins that gain most
-// from one reverse turnaround (the review allows about two reverse shots) may add up to 60 % of their range
-function materialCapacity(clipSet, turnSlots = 2) {
+// strong material without filler: A/B clips without a full-range artefact, each capped at recommendedMax +20 %, no repeats;
+// one push-in (one prominent forward->reverse per video) may gain up to 60 % of its range by a turnaround
+function materialCapacity(clipSet, turnSlots = 1) {
   const per = clipSet.clips.map(c => {
     const span = Math.max(0, c.safe[1] - c.safe[0]), art = sum(c.problems.filter(p => ARTIFACT.test(p.type + " " + p.note)).map(p => overlap(p.from, p.to, c.safe[0], c.safe[1])));
     const txt = [c.roomType, c.description, c.camera?.note].join(" "), moving = !/static|statisch|locked/i.test(String(c.camera?.type ?? c.camera ?? ""));
-    const clean = span > 0 && art < 0.7 * span, canTurn = clean && moving && !REVERSE_RISK.test(txt) && !art;
-    const limit = c.maxScreen == null ? span * 1.6 : "CDE".includes(c.priorityClass) ? c.maxScreen : c.maxScreen * 1.25 + 0.2, base = clean ? Math.min(limit, span) : 0;
+    const strong = "AB".includes(c.priorityClass), clean = strong && span > 0 && art < 0.7 * span, canTurn = clean && moving && !REVERSE_RISK.test(txt) && !art;
+    const limit = c.maxScreen == null ? span * 1.6 : c.maxScreen * 1.2, base = clean ? Math.min(limit, span) : 0;
     return { ref: c.ref, filename: c.filename, priorityClass: c.priorityClass, canTurn, clean, base: r3(base), gain: canTurn ? r3(Math.max(0, Math.min(limit - base, 0.6 * span))) : 0 };
   });
   const top = new Set([...per].filter(x => x.gain > 0).sort((a, b) => b.gain - a.gain).slice(0, turnSlots).map(x => x.ref));
@@ -650,20 +666,20 @@ function materialCapacity(clipSet, turnSlots = 2) {
 // only the length is bound to the material: repeats, overruns and artefacts can always be cut, the price is a shorter video
 const MATERIAL_BOUND = new Set(["too-short"]);
 function classifyReview(rev, clipSet) {
-  const cap = materialCapacity(clipSet), short = cap.total < 23.5; // margin: the estimate ignores overlaps between uses and short burst shots
+  const cap = materialCapacity(clipSet), short = cap.total < 23.5; // margin: the estimate ignores cut points and short burst shots
   for (const x of rev.repair) {
     x.fix = FIX[x.id] || "";
     x.avoidable = !(short && MATERIAL_BOUND.has(x.id));
-    x.why = x.avoidable ? `Vermeidbar: mit diesem Material lösbar (sauberes Material ohne Wiederholung etwa ${fx3(cap.total)} s).` : `Unvermeidbar: sauberes Material ohne Wiederholung reicht nur für etwa ${fx3(cap.total)} s (mit zwei Turnarounds, innerhalb der empfohlenen Screentime); für 23 s müsste der Plan an anderer Stelle eine Regel brechen.`;
+    x.why = x.avoidable ? `Vermeidbar: mit diesem Material lösbar (starkes Material ohne Füllstoff etwa ${fx3(cap.total)} s).` : `Unvermeidbar: starkes Material ohne Füllstoff (A/B-Clips ohne Artefakt, recommendedMax +20 %, keine Wiederholung, ein Turnaround) trägt nur etwa ${fx3(cap.total)} s. Länger ginge nur mit Füllstoff, Wiederholung oder Reverse für Länge.`;
   }
   rev.capacity = cap; rev.avoidable = rev.repair.filter(x => x.avoidable); rev.unavoidable = rev.repair.filter(x => !x.avoidable);
   return rev;
 }
-// final: no repair points; needs-repair: points left and repair rounds left; final-with-warnings: rounds used up; failed: technical errors
-function planStatus(val, rev, repairsDone) {
+// final: no repair points; needs-repair: any avoidable point, however many rounds ran; final-with-warnings: only unavoidable points; failed: technical errors
+function planStatus(val, rev) {
   if (!val.passed) return "failed";
   if (rev.ok) return "final";
-  return repairsDone < MAX_REPAIRS && rev.avoidable.length ? "needs-repair" : "final-with-warnings";
+  return rev.avoidable.length ? "needs-repair" : "final-with-warnings";
 }
 const shotKey = s => [s.ref, s.ts, s.te, s.ss, s.se, s.direction].map(v => typeof v === "number" ? v.toFixed(2) : v).join("|");
 // what changed from one plan version to the next (a repair must really change the edit)
@@ -701,8 +717,8 @@ function playbackOut(s) {
     speedReason: s.speedReason || null, builder: shotstackPlayback(s) };
 }
 function buildPlanExport(st) {
-  const { plan: p, val, clipSet, music, sec, mc, ai, styleId, attempts, createdAt } = st, rev = st.rev?.capacity ? st.rev : classifyReview(st.rev || reviewPlan(p, clipSet, mc, styleId), clipSet);
-  const status = st.status || planStatus(val, rev, st.repairsDone ?? MAX_REPAIRS);
+  const { plan: p, val, clipSet, music, sec, mc, ai, styleId, attempts, createdAt } = st, rev = st.rev?.capacity ? st.rev : classifyReview(st.rev || reviewPlan(p, clipSet, mc, styleId, ai), clipSet);
+  const status = st.status || planStatus(val, rev);
   const used = new Set(p.shots.filter(s => s.clip).map(s => s.clip.ref));
   const omittedReason = Object.fromEntries((ai.summary?.omitted || []).map(o => [o.clip, o.reason]));
   const shots = p.shots.map(s => ({
@@ -819,7 +835,7 @@ Selling points: ${C(cs.sellingPoints)}
 Similar clips: ${C(cs.similarGroups)}
 CLIPS, ranked; weights are final after the comparison of all clips. SAFE = usable range minus the weak start/end (hard limit). screenTime = recommended total [min, max] s for the whole video if the clip is used at all (secondary clips may simply be left out):
 ${cs.clips.map(clipLine).join("\n")}
-Material: clean source without repeats, capped by the recommended screen time and counting one reverse turnaround on suitable push-ins: about ${materialCapacity(cs).total} s. The video does NOT have to fill the section: any length from 23 s to ${r3(mc.L)} s is fine. If the strong material carries 23.4 s, the video is 23.4 s long. Never repeat clips to reach a length.
+Material: strong clips only (class A/B without a full-range artefact), no repeats, each at most recommendedMax +20 %, one forward->reverse turnaround: about ${materialCapacity(cs).total} s. About 23 s is the target, not a duty: if the strong material carries 22.8 s or less, the video is that long. Never use filler, repeats or reverse to reach a length.
 
 THINK FIRST and write it into "directorAnalysis": 1. What sells this property? 2. Which clips are strongest? 3. Which only support, and which add nothing to this video? 4. Which source ranges are truly good, and which could carry a reverse move? 5. How does this music section develop? 6. Where are the strong beats, downbeats, drops and energy changes that matter? 7. Which dramaturgy follows from that? Only then build the timeline.
 
@@ -828,13 +844,15 @@ Before every shot ask: without a timeline and without rules in front of me, woul
 - Music markers are orientation points, not a grid. A shot may start inside a bar on an ordinary beat, span several bars, use only part of a bar, or deliberately skip a marker. Not every bar start needs a cut. Cut first for picture and story, then let it sit cleanly on the music (a beat, a downbeat, a drop, an energy change).
 - Shot lengths vary naturally with content and music, e.g. 0.6, 0.9, 1.3, 1.8, 2.2, 2.7, 3.1, 3.6 s. No forced random values, but no visible pattern: avoid many shots of exactly one bar (${fx(mc.barLen, 2)} s) or two bars, and avoid repeating the same length.
 - Show a very strong selling point early: within the first 3-6 s at least one of the strongest clips (exterior, pool, living room, strong terrace, kitchen or view, as the analysis ranks them). Do not save every strong clip for a later drop; a hero clip may return at a peak with a different source range.
-- Not every clip has to be used: 6 of 8 clips is a perfectly good plan. Leave out bathroom, WC, dressing room, office, hallway and other secondary clips when they do not make this video better. Ask "which shots make this video better?", not "how do I fit all clips in".
-- Video length: between 23 s and ${r3(mc.L)} s (the section). If there is not enough strong material, make the video shorter instead of repeating: a strong 23.5 s video beats a 27 s one with filler. End on a musically clean point (a bar start or a strong beat); the music then fades out there.
+- Not every clip has to be used: 6 of 8 clips is a perfectly good plan. Secondary clips (class C/D/E: bathroom, WC, dressing room, office, hallway, side rooms) are LEFT OUT BY DEFAULT. Keep one only if it clearly makes this video better, and then name it with the reason in "summary.keptSecondary". Every clip you call filler in your own analysis goes into "directorAnalysis.fillerClips" and is not used. Ask "which shots make this video better?", not "how do I fit all clips in".
+- A clip whose visible AI artefact covers its whole usable range is left out unless it is essential (class A); never use it as a bridge or filler.
+- Video length: about 23 s to ${r3(mc.L)} s is the target, quality beats the target. If there is not enough strong material, make the video shorter instead of adding filler or repeats: a strong 22.8 s video beats a 25 s one with filler. End on a musically clean point (a bar start or a strong beat); the music then fades out there.
 - The final weighting must be visible: primary clips (class A/B, high contentWeight and screenTimePriority) get clearly more screen time and the key musical moments; secondary clips stay short or are left out. The concrete clip analysis decides, not the room name.
 - No fixed room order and no fixed rhythm template. The best edit matters more than being different.
 
 SOURCE, REPEATS, SPEED
 - Source ranges: stay inside SAFE (hard). Prefer the strongest range. Never use weak ranges, problem ranges or ranges across a hard cut; avoid ranges with a visible artefact if the edit works without them. Cut shorter rather than longer.
+- recommendedMax is not absolutely hard, but more than about 20 % above it needs a really strong creative reason in "summary.screenTimeOverrides"; without one, shorten the shot.
 - A source clip appears at most twice, and the second use only when it looks clearly different: at most about 35-40 % source overlap between two longer uses, never for a static clip, never for secondary clips, never just to fill time.
 - Playback speed: respect "playback" from the analysis. With "normal", stay at 1.0 unless picture and music both clearly gain from a change; then give "speedReason". Never change speed to squeeze or stretch material; never with "avoid speed change".
 - Speed ramps (forward only): rare and purposeful (a build into a strong downbeat, a drop, an energy rise) on a stable camera range. "points": [{"atSource": source s, "speed": n}], ascending, inside the shot's source range; speed changes linearly between points.
@@ -842,7 +860,8 @@ SOURCE, REPEATS, SPEED
 REVERSE AND DIRECTION CHANGES (creative tool, not a default, but check it actively for every strong push-in: a forward move that turns smoothly and pulls back can make a hero shot longer without its weak end)
 - A shot may play a range backwards ("playback": {"direction": "reverse", "speed": n}, sourceStart > sourceEnd), or change direction once inside one continuous shot: "segments": [{"sourceStart": 0.6, "sourceEnd": 2.8, "speed": 1.0}, {"sourceStart": 2.8, "sourceEnd": 1.4, "speed": 1.0}]. The camera moves in, reaches a good point, the move reverses and pulls back out. Use it to let a strong clip run longer without its weak end, to pull back before a drop, to move out of a room after a peak, or to stretch a hero shot over a build.
 - A direction change gets a smooth turnaround (speed falls to 0 and rises again): "turnaround": {"enabled": true, "type": "smooth", "duration": 0.4-0.8 s}. Never a hard flip from 1.0 to -1.0.
-- At most one direction change per shot, and only a few such shots per video; no forward-reverse-forward boomerangs.
+- Forward->reverse is a special tool: normally at most ONE prominent forward->reverse hero shot per 20-30 s video. A second only if it looks visually clearly different, the music strongly carries it and it does not read as a repeated boomerang trick; then justify it in "summary.secondReverseJustification". Never use reverse to gain length. At most one direction change per shot, no forward-reverse-forward.
+- A turnaround does not license screen time far above recommendedMax.
 - Only on suitable ranges: calm camera moves, clean forward moves, architecture, living room, kitchen, exterior, terrace, stable geometry. Not on visible AI artefacts, strong light changes, water or anything moving that looks wrong backwards (pool water, people, curtains, leaves), morphing or bad end frames. Reverse never rescues a bad range: it turns at or before the end of SAFE, it never runs into a weak range first.
 - Every reverse shot needs "speedReason" (why the picture and the music profit).
 
@@ -855,9 +874,9 @@ CUTS AND TRANSITIONS
 SELF-REVIEW before answering: look at your shot list as a viewer. Does it look like an algorithm dealing clips onto bars (equal lengths, a cut on every bar, the best room only after 10 s, weak rooms in to fill time, repeats of the same range)? Fix that, then write one honest sentence into "summary.selfReview".
 
 OUTPUT JSON only. Write every free-text value in German, concise (reason at most 30 words). Use the clip ids (K1...).
-{"directorAnalysis": {"sells": string, "strongest": string, "supporting": string, "goodRanges": string, "musicDevelopment": string, "syncPoints": string, "dramaturgy": string},
+{"directorAnalysis": {"sells": string, "strongest": string, "supporting": string, "goodRanges": string, "musicDevelopment": string, "syncPoints": string, "dramaturgy": string, "fillerClips": [clip id] (clips that add nothing to this video; they are not used)},
  "creative": {"opening": string, "build": string, "energyMiddle": string, "heroMoments": string, "finale": string},
- "summary": {"overallDramaturgy": string, "editingConcept": string, "heroClips": [clip id], "omitted": [{"clip": clip id, "reason": string}], "selfReview": string, "unresolved": [{"id": review point id, "reason": string}] (only in a repair: points that are impossible with this material)},
+ "summary": {"overallDramaturgy": string, "editingConcept": string, "heroClips": [clip id], "omitted": [{"clip": clip id, "reason": string}], "selfReview": string, "keptSecondary": [{"clip": clip id, "reason": string}] (each used C/D/E clip), "screenTimeOverrides": [{"clip": clip id, "reason": string}] (each clip more than 20 % above recommendedMax), "secondReverseJustification": null or string, "unresolved": [{"id": review point id, "reason": string}] (only in a repair: points that are impossible with this material)},
  "videoDuration": number,
  "shots": [{"clip": clip id, "timelineStart": number, "timelineEnd": number,
    "sourceStart": number, "sourceEnd": number, "playback": {"direction": "forward" or "reverse", "speed": number},
@@ -875,14 +894,14 @@ OUTPUT JSON only. Write every free-text value in German, concise (reason at most
   function repairPrompt(cur, n, L, extra) {
     const { ai, plan: p, val, rev } = cur, cs = S.clip.data, list = a => a.map(x => `- ${x.msg}`).join("\n") || "- none";
     const usage = rev.capacity.per.map(x => { const c = cs.clips.find(k => k.ref === x.ref), sh = p.shots.filter(s => s.clip === c);
-      return `- ${x.ref} ${x.filename} (${c.roomType}, class ${c.priorityClass}): SAFE ${c.safe.join("-")} s, max ${c.maxScreen ?? "?"} s, reverse turnaround ${x.canTurn ? "suitable" : "not suitable"}${x.clean ? "" : ", visible artefact"}; in V${n}: ${sh.length ? `${sh.length} use(s), ${fx3(sum(sh.map(s => s.dur)))} s, ranges ${sh.map(s => `${fx3(s.lo)}-${fx3(s.hi)}`).join(", ")}` : "not used"}`; }).join("\n");
+      return `- ${x.ref} ${x.filename} (${c.roomType}, class ${c.priorityClass}): SAFE ${c.safe.join("-")} s, max ${c.maxScreen ?? "?"} s, ${"CDE".includes(c.priorityClass) ? "secondary (left out by default)" : `reverse turnaround ${x.canTurn ? "suitable" : "not suitable"}`}${artifactShare(c) >= 0.7 ? ", visible artefact over the whole range" : ""}; in V${n}: ${sh.length ? `${sh.length} use(s), ${fx3(sum(sh.map(s => s.dur)))} s, ranges ${sh.map(s => `${fx3(s.lo)}-${fx3(s.hi)}`).join(", ")}` : "not used"}`; }).join("\n");
     return `\n\nPLAN V${n} (your previous plan, at the end) was checked by code against both analyses and reviewed the way a senior editor would review it. It is NOT final. Write PLAN V${n + 1}.
 Rebuild the edit where needed instead of patching numbers. Allowed and expected: remove shots, leave clips out completely, reorder, change source ranges, shot lengths and cut points, shorten the video (anything from 23 s to ${r3(L)} s; the music simply ends earlier inside the section, it is never cut), remove repeats or plan a clearly different reuse, add a reverse turnaround on a suitable push-in, change speed and transitions. Keep only what is really good.
 Every CREATIVE point must be gone in V${n + 1}. Only if a point is truly impossible with this material, keep it and list it in "summary.unresolved" with the reason.
 ERRORS (must be fixed):\n${list(val.errors)}
 CREATIVE (must be fixed; "target" is what V${n + 1} has to reach):\n${rev.repair.map(x => `- [${x.id}] ${x.msg} -> target: ${x.fix}${x.avoidable ? "" : " (code note: may be unavoidable with this material)"}`).join("\n")}
 WARNINGS (fix where it helps):\n${list(val.warnings)}
-MATERIAL: clean material without repeats about ${fx3(rev.capacity.total)} s. Per clip:\n${usage}
+MATERIAL: strong material without filler about ${fx3(rev.capacity.total)} s; a shorter video is fine. Per clip:\n${usage}
 PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: ai.shots })}${extra || ""}`;
   }
   function extractJSON(text) {
@@ -896,7 +915,7 @@ PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: a
     if (res.truncated) throw { code: "truncated", message: "Die Antwort wurde abgeschnitten.", text: res.text };
     return { ai: extractJSON(res.text), text: res.text, ms: Date.now() - t0, tier: res.modelTierApplied };
   }
-  const evaluate = (ai, cs, mc, styleId) => { const plan = normalizePlan(ai, cs, mc, styleId), val = validatePlan(plan, cs, mc, styleId); return { ai, plan, val, rev: classifyReview(reviewPlan(plan, cs, mc, styleId), cs) }; };
+  const evaluate = (ai, cs, mc, styleId) => { const plan = normalizePlan(ai, cs, mc, styleId), val = validatePlan(plan, cs, mc, styleId); return { ai, plan, val, rev: classifyReview(reviewPlan(plan, cs, mc, styleId, ai), cs) }; };
   const score = x => x.val.errors.length * 1000 + x.rev.avoidable.length * 20 + x.rev.repair.length * 10 + x.val.warnings.length;
   const needsRepair = x => x.val.errors.length > 0 || x.rev.avoidable.length > 0;
   const ERRMSG = { not_granted: "Claude wurde für diese Seite nicht freigegeben.", rate_limited: "Zu viele Anfragen. Bitte kurz warten.", cancelled: "Abgebrochen.", truncated: "Die Antwort war zu lang und wurde abgeschnitten.", invalid_json: "Claude hat kein gültiges JSON geliefert." };
@@ -907,8 +926,8 @@ PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: a
   }
   // V1 -> review -> V2 -> review -> V3 at most; an identical or unusable answer does not count as a version and is requested once more
   async function repairLoop(run, cur, ctx) {
-    const { cs, music, sec, mc, styleId } = ctx;
-    while (needsRepair(cur) && run.repairsDone < MAX_REPAIRS) {
+    const { cs, music, sec, mc, styleId } = ctx, stop = run.repairsDone + MAX_REPAIRS;
+    while (needsRepair(cur) && run.repairsDone < stop) {
       const n = run.attempts.length;
       log(`Plan V${n} ist nicht final (${[cur.val.errors.length && `${cur.val.errors.length} Fehler`, cur.rev.avoidable.length && `${kp(cur.rev.avoidable.length)} vermeidbar`].filter(Boolean).join(", ")}). Claude baut Plan V${n + 1} …`);
       let next = null, extra = "";
@@ -934,9 +953,9 @@ PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: a
   function finishRun(run, versions, ctx) {
     const best = versions.reduce((b, x) => score(x) < score(b) ? x : b, versions[0]), idx = versions.indexOf(best);
     Object.assign(run, best, { clipSet: ctx.cs, music: ctx.music, mc: ctx.mc, bestAttempt: idx });
-    run.status = planStatus(best.val, best.rev, run.repairsDone);
+    run.status = planStatus(best.val, best.rev);
     if (idx !== versions.length - 1) log(`Verwendet wird Plan V${idx + 1}, er schneidet besser ab als V${versions.length}.`);
-    const msg = { final: [`Plan V${idx + 1} ist final: keine Fehler, keine offenen kreativen Punkte.`, "ok"], "needs-repair": [`Plan V${idx + 1} braucht noch eine Reparatur (${best.rev.avoidable.length} vermeidbar).`, "warn"],
+    const msg = { final: [`Plan V${idx + 1} ist final: keine Fehler, keine offenen kreativen Punkte.`, "ok"], "needs-repair": [`Plan V${idx + 1} ist nach ${run.repairsDone} Reparaturrunde${run.repairsDone === 1 ? "" : "n"} nicht final: ${kp(best.rev.avoidable.length)} vermeidbar. Vermeidbare Punkte werden nicht akzeptiert; „Plan reparieren“ startet zwei weitere Runden.`, "warn"],
       "final-with-warnings": [`Plan V${idx + 1}: Final with unresolved creative warnings (${best.rev.repair.length} offen, ${best.rev.unavoidable.length} davon unvermeidbar). Export erst nach Bestätigung.`, "warn"], failed: [`Plan V${idx + 1} hat noch ${best.val.errors.length} technische Fehler und wird nicht exportiert.`, "bad"] }[run.status];
     log(...msg);
     S.accept = false; S.run = run; persistRun();
@@ -985,7 +1004,7 @@ PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: a
     const mc = musicCtx(music, sec), ai = saved.attempts?.[saved.bestAttempt ?? -1]?.ai || saved.ai; if (!ai) return;
     const x = evaluate(ai, cs, mc, saved.styleId), outdated = saved.rules !== RULES_VERSION;
     S.run = { ...saved, attempts: saved.attempts || [], rejected: saved.rejected || [], repairsDone: outdated ? 0 : saved.repairsDone ?? MAX_REPAIRS, ...x, sec, mc, clipSet: cs, music, outdated };
-    S.run.status = outdated && !x.rev.ok ? "needs-repair" : planStatus(x.val, x.rev, S.run.repairsDone);
+    S.run.status = outdated && !x.rev.ok ? "needs-repair" : planStatus(x.val, x.rev);
   }
 
   // ---------- export ----------
@@ -1037,7 +1056,7 @@ PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: a
     if (!ready()) { $("budget").innerHTML = ""; return; }
     const cs = S.clip.data, sec = sectionOf(S.music.data, S.secKey), safe = sum(cs.clips.map(c => Math.max(0, c.safe[1] - c.safe[0]))), strong = sum(cs.clips.map(c => c.strongest[1] - c.strongest[0]));
     const cap = materialCapacity(cs);
-    $("budget").innerHTML = `<p class="notice ${cap.total >= 23 ? "info" : ""}">Material: ${fx(safe, 1)} s sichere Quellzeit (davon ${fx(strong, 1)} s stärkste Bereiche) in ${cs.clips.length} Clips. Ohne Wiederholungen, innerhalb der empfohlenen Screentime und mit einem Turnaround auf geeigneten Push-ins trägt es etwa ${fx(cap.total, 1)} s. Der Musikabschnitt dauert ${fx(sec.duration, 1)} s; das Video muss ihn nicht füllen, 23 s bis ${fx(sec.duration, 1)} s sind in Ordnung.${cap.total < 23 ? " Unter 23 s sauberes Material: einzelne Punkte können unvermeidbar sein." : ""}</p>`;
+    $("budget").innerHTML = `<p class="notice ${cap.total >= 23 ? "info" : ""}">Material: ${fx(safe, 1)} s sichere Quellzeit (davon ${fx(strong, 1)} s stärkste Bereiche) in ${cs.clips.length} Clips. Starkes Material ohne Füllstoff (A/B-Clips ohne Artefakt, recommendedMax +20 %, keine Wiederholung, ein Turnaround) trägt etwa ${fx(cap.total, 1)} s. Ziel sind etwa 23 s, keine Pflicht: ist weniger starkes Material da, wird das Video kürzer.</p>`;
   }
   function render() {
     $("styles").innerHTML = Object.entries(STYLES).map(([k, s]) => `<button data-style="${k}" aria-pressed="${k === S.style}">${s.label}<span>${s.ui}</span></button>`).join("");
@@ -1087,14 +1106,15 @@ PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: a
     : s.segs.length > 1 ? `<span class="rev">${s.segs.map(g => `${g.dir > 0 ? "▶" : "◀"} ${fx(g.v, 2)}×`).join(" ⟲ ")}</span><br><span class="muted">${s.segs.some(g => g.tauIn) ? `Turnaround ${fx(sum(s.segs.map(g => g.tauIn + g.tauOut)), 2)} s` : "harter Wechsel"}</span>`
     : s.segs[0].dir < 0 ? `<span class="rev">◀ ${fx(s.segs[0].v, 2)}×</span><br><span class="muted">reverse</span>` : `${fx(s.speed, 2)}×`;
   function results(run) {
-    const { plan: p, val, ai, mc, clipSet: cs, sec } = run, rev = run.rev?.capacity ? run.rev : classifyReview(run.rev || reviewPlan(p, cs, mc, run.styleId), cs), st = STYLES[run.styleId], d = buildPlanExport({ ...run, rev }), sm = d.summary;
-    const stale = run.styleId !== S.style || sec.key !== (sectionOf(S.music.data, S.secKey)?.key), status = run.status || planStatus(val, rev, run.repairsDone ?? MAX_REPAIRS), vn = (run.bestAttempt ?? run.attempts.length - 1) + 1;
+    const { plan: p, val, ai, mc, clipSet: cs, sec } = run, rev = run.rev?.capacity ? run.rev : classifyReview(run.rev || reviewPlan(p, cs, mc, run.styleId, ai), cs), st = STYLES[run.styleId], d = buildPlanExport({ ...run, rev }), sm = d.summary;
+    const stale = run.styleId !== S.style || sec.key !== (sectionOf(S.music.data, S.secKey)?.key), status = run.status || planStatus(val, rev), vn = (run.bestAttempt ?? run.attempts.length - 1) + 1;
     const unresolvedWhy = Object.fromEntries((ai.summary?.unresolved || []).map(u => [u.id, u.reason]));
     const STATUS = { final: ["ok", "Final", `Plan V${vn}: keine technischen Fehler, keine offenen kreativen Punkte.`],
-      "needs-repair": ["warn", "Needs repair", run.outdated ? "Dieser Plan wurde mit älteren Regeln erzeugt und ist nach den aktuellen Regeln nicht final." : `Plan V${vn} ist nicht final: ${kp(rev.avoidable.length)} vermeidbar. Export gesperrt.`],
+      "needs-repair": ["warn", "Needs repair", run.outdated ? "Dieser Plan wurde mit älteren Regeln erzeugt und ist nach den aktuellen Regeln nicht final." : `Plan V${vn} ist nicht final: ${kp(rev.avoidable.length)} vermeidbar${run.repairsDone ? ` nach ${run.repairsDone} Reparaturrunde${run.repairsDone === 1 ? "" : "n"}` : ""}. Vermeidbare Punkte werden nicht akzeptiert; Export gesperrt.`],
       "final-with-warnings": ["warn", "Final with unresolved creative warnings", `Plan V${vn} nach ${run.repairsDone} Reparaturrunde${run.repairsDone === 1 ? "" : "n"}: ${kp(rev.repair.length)} offen${rev.unavoidable.length ? `, ${rev.unavoidable.length} davon mit diesem Material unvermeidbar` : ""}. Export erst nach Bestätigung.`],
       failed: ["bad", "Nicht bestanden", `Plan V${vn} hat ${val.errors.length} technische Fehler. Export gesperrt; bitte neu erzeugen.`] }[status];
     const banner = `<div class="status-banner ${STATUS[0]}"><div><b>${STATUS[1]}</b><p class="small">${esc(STATUS[2])}</p>
+      ${status === "needs-repair" && !run.outdated ? `<ul class="small">${rev.avoidable.map(x => `<li>${esc(x.msg)}</li>`).join("")}</ul>` : ""}
       ${status === "final-with-warnings" ? `<ul class="small">${rev.repair.map(x => `<li><b>${esc(x.msg)}</b><br>${esc(x.why)}${unresolvedWhy[x.id] ? ` Claude: ${esc(unresolvedWhy[x.id])}` : x.avoidable ? " Nach zwei Reparaturrunden nicht gelöst." : ""}</li>`).join("")}</ul>` : ""}</div>
       ${(status === "needs-repair" || (status === "failed" && (run.repairsDone ?? MAX_REPAIRS) < MAX_REPAIRS)) && S.sample ? `<button class="primary" data-act="repair" ${S.busy ? "disabled" : ""}>Plan reparieren</button>` : ""}</div>`;
     const pill = s => `<span class="pill p-${s}">${{ ok: "bestanden", warn: "Hinweis", error: "Fehler", info: "Info", open: "offen" }[s]}</span>`;

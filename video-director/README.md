@@ -77,11 +77,12 @@ Für den Plan rechnet der Code den gewählten Abschnitt in **Videozeit** um: Tra
    - Taktraster: mindestens 60 % der Shots genau 1, 2 oder mehr Takte lang, sichtbar wiederkehrende Shot-Längen, oder fast jeder Taktanfang hat einen Schnitt
    - kein starker Selling Point in den ersten 6 s (Klasse A, Rang 1–2 oder starker B-Raum)
    - eine zweite Verwendung mit mehr als 40 % Source-Overlap, oder eine Wiederholung eines statischen Clips
-   - Screentime über recommendedMax (Nebenclips sofort, A/B ab 1,25× + 0,2 s); Nebenclips über 25 % des Videos
+   - Screentime: Nebenclips über recommendedMax; A/B mehr als 20 % darüber ohne Grund in `summary.screenTimeOverrides`, mehr als 50 % immer; Nebenclips über 25 % des Videos
    - Speed entgegen der Analyse: bei „normal“ über ±25 %, oder über ±10 % ohne `speedReason`
-   - sichtbares Artefakt (artifact, morph, warp …) im genutzten Bereich
-   - Video kürzer als etwa 23 s
-   - Reverse: mehr als etwa 2 Reverse-Shots, mehr als ein Richtungswechsel pro Shot, Wechsel ohne Turnaround, ohne Begründung, oder auf Material, bei dem die Analyse Wasser, Menschen, Vorhänge oder Ähnliches nennt bzw. Artefakte oder Lichtprobleme meldet
+   - sichtbares Artefakt (artifact, morph, warp …) im genutzten Bereich; ein Clip, dessen Artefakt mindestens 70 % des nutzbaren Bereichs abdeckt und der nicht Klasse A ist, wird gar nicht verwendet (`artifact-clip`)
+   - Füllstoff (`filler`): ein Clip aus der eigenen Liste `directorAnalysis.fillerClips`, oder ein C/D/E-Clip ohne Begründung in `summary.keptSecondary`. Nebenclips bleiben standardmäßig weg.
+   - Video unter 22,5 s: Ziel sind etwa 23 s, keine Pflicht. Unvermeidbar, wenn das starke Material ohne Füllstoff nicht mehr trägt.
+   - Reverse: mehr als eine Forward→Reverse-Sequenz ohne Begründung in `summary.secondReverseJustification` (höchstens zwei), mehr als 2 Reverse-Shots, mehr als ein Richtungswechsel pro Shot, Wechsel ohne Turnaround, ohne Begründung, oder auf Material, bei dem die Analyse Wasser, Menschen, Vorhänge oder Ähnliches nennt bzw. Artefakte oder Lichtprobleme meldet
 5. **Reparatur (Regeln v3): PLAN V1 → Prüfung → PLAN V2 → Prüfung → PLAN V3**, höchstens 2 Reparaturrunden.
    - **Auslöser:** Hat ein Plan technische Fehler oder vermeidbare kreative Punkte, ist er nicht final.
    - **Was Claude bekommt:**
@@ -97,32 +98,34 @@ Für den Plan rechnet der Code den gewählten Abschnitt in **Videozeit** um: Tra
    - **Versionen:** Die Seite zeigt jede Version mit ihrer Änderung zur Vorversion (z. B. „13 → 8 Shots · weggelassen: 5.mp4 · Video 27,00 → 20,80 s“) und die verworfenen Antworten.
 6. **Status als Gate:**
    - **`final`:** keine Fehler, keine kreativen Punkte. Der Export ist frei.
-   - **`needs-repair`:** vermeidbare kreative Punkte offen und Reparaturrunden übrig, oder ein gespeicherter Plan aus älteren Regeln.
+   - **`needs-repair`:** Mindestens ein vermeidbarer Punkt ist offen, egal wie viele Runden gelaufen sind; oder der Plan stammt aus älteren Regeln. Vermeidbare Punkte werden nie akzeptiert.
      - Der Export ist gesperrt.
-     - „Plan reparieren“ startet die Reparatur ab diesem Plan.
-   - **`final-with-warnings`** („Final with unresolved creative warnings“): Die Runden sind verbraucht, oder es bleibt nur Unvermeidbares.
+     - „Plan reparieren“ startet zwei weitere Runden ab der besten Version.
+   - **`final-with-warnings`** („Final with unresolved creative warnings“): nur, wenn alle offenen Punkte unvermeidbar sind.
      - Jeder offene Punkt wird mit Begründung angezeigt: vermeidbar oder unvermeidbar, dazu Claudes Erklärung aus `summary.unresolved`.
      - Export erst nach ausdrücklicher Bestätigung (Checkbox). Im JSON stehen dann `meta.status` und `acceptedUnresolved: true`.
    - **`failed`:** technische Fehler. Der Export ist gesperrt.
-   - **Unvermeidbar** ist nur die Videolänge, und nur wenn das saubere Material nicht reicht.
-     - Gerechnet wird ohne Wiederholungen, innerhalb der empfohlenen Screentime, mit höchstens zwei Turnarounds und mit Sicherheitsabstand: unter 23,5 s.
+   - **Unvermeidbar** ist nur die Videolänge, und nur wenn das starke Material ohne Füllstoff nicht reicht.
+     - Gerechnet wird mit A/B-Clips ohne flächiges Artefakt, je höchstens recommendedMax +20 %, ohne Wiederholungen, mit einem Turnaround und mit Sicherheitsabstand: unter 23,5 s.
      - Wiederholungen, Überschreitungen und Artefakte lassen sich immer wegschneiden; der Preis ist ein kürzeres Video.
 
 Die technische Prüfung (Schritt 3) ist gegenüber Regeln v1 unverändert. Sie liest den Source-Bereich jetzt aus allen Segmenten eines Shots, damit sie auch Reverse-Shots prüft.
 
 **Regenerate Plan** gibt Claude den vorherigen Plan mit. Ein neuer Plan darf ähnlich sein, wenn der alte gut zur Musik passt.
 
-## Schnittlogik (Regeln v2/v3)
+## Schnittlogik (Regeln v2–v4)
 
 Priorität: 1 Zuschauerinteresse, 2 starke Immobilie zeigen, 3 visueller Flow, 4 musikalischer Flow, 5 Style, 6 technisches Raster.
 
 - **Marker statt Raster:** Musikmarker sind Orientierung. Ein Shot darf mitten im Takt auf einem Beat beginnen, mehrere Takte überspannen oder einen Marker überspringen.
 - **Shot-Längen:** variieren natürlich, ohne erkennbares Muster.
 - **Selling Point früh:** ein sehr starker Clip in den ersten 3–6 s.
-- **Auslassen:** Clips dürfen wegfallen; Nebenräume bleiben weg, wenn sie das Video nicht besser machen.
-- **Länge:** 23 s bis Abschnittsende. Das Video muss den Abschnitt nicht füllen. Lieber kürzer als mit Wiederholungen füllen. Die Musik läuft dann am Stück und blendet am Videoende aus. Der Prompt nennt die Materialmenge ohne Wiederholungen, nicht mehr die Abschnittslänge als Ziel.
+- **Auslassen:** Nebenclips (C/D/E) bleiben standardmäßig weg. Behalten nur mit Begründung in `summary.keptSecondary`. Was der Director selbst Füllstoff nennt, fliegt raus.
+- **Länge:** Etwa 23 s sind das Ziel, keine Pflicht. Qualität geht vor: Trägt das starke Material weniger, wird das Video kürzer, statt Füllstoff, Wiederholungen oder Reverse für Länge einzusetzen. Die Musik läuft am Stück und blendet am Videoende aus.
 - **Wiederholung:** nur mit klar anderem Bereich (höchstens ca. 35–40 % Overlap), nie bei statischen oder Nebenclips.
 - **Speed:** `recommendedPlayback` gilt. Abweichungen nur mit `speedReason`.
+- **Reverse:** Forward→Reverse ist ein Spezialwerkzeug. Bei 20–30 s normalerweise höchstens eine prominente Sequenz; eine zweite nur, wenn sie visuell klar anders wirkt und die Musik sie stark trägt. Nie für Länge.
+- **recommendedMax:** Ein Turnaround rechtfertigt keine Screentime weit darüber. Mehr als etwa 20 % darüber braucht einen starken Grund, sonst wird gekürzt.
 
 ### Reverse und Richtungswechsel
 
