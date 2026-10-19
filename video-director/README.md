@@ -82,17 +82,37 @@ Für den Plan rechnet der Code den gewählten Abschnitt in **Videozeit** um: Tra
    - sichtbares Artefakt (artifact, morph, warp …) im genutzten Bereich
    - Video kürzer als etwa 23 s
    - Reverse: mehr als etwa 2 Reverse-Shots, mehr als ein Richtungswechsel pro Shot, Wechsel ohne Turnaround, ohne Begründung, oder auf Material, bei dem die Analyse Wasser, Menschen, Vorhänge oder Ähnliches nennt bzw. Artefakte oder Lichtprobleme meldet
-5. **Korrektur:** Bei Fehlern oder kreativen Punkten bekommt Claude die Listen (Fehler, kreative Punkte, Hinweise) und liefert einen verbesserten Plan.
-   - höchstens 3 Runden
-   - eine Runde ohne Verbesserung beendet die Schleife
-   - verwendet wird der beste Plan (Fehler vor kreativen Punkten vor Hinweisen), nicht automatisch der letzte
-   - was danach offen bleibt, ist markiert: „technisch bestanden, kreativ offen“ oder „nicht bestanden“
+5. **Reparatur (Regeln v3): PLAN V1 → Prüfung → PLAN V2 → Prüfung → PLAN V3**, höchstens 2 Reparaturrunden.
+   - **Auslöser:** Hat ein Plan technische Fehler oder vermeidbare kreative Punkte, ist er nicht final.
+   - **Was Claude bekommt:**
+     - die komplette Liste: Fehler; kreative Punkte mit jeweils einem konkreten Ziel; Hinweise
+     - das Material pro Clip: sicherer Bereich, Maximum, ob ein Turnaround passt, wie der Clip im alten Plan genutzt wurde
+     - den Auftrag, den Edit **neu aufzubauen**: Shots entfernen, Clips weglassen, umstellen, Bereiche, Längen und Schnittpunkte ändern, Video kürzen, Wiederholungen streichen, Reverse einsetzen, Speed und Übergänge ändern
+   - **Echte Änderung:** Der Code vergleicht jede Antwort mit der Vorversion.
+     - Verglichen werden Shots, Bereiche, Timeline, Videolänge, ausgelassene Clips und Reverse.
+     - Eine identische Antwort zählt nicht als neue Version: Claude bekommt sie als „identisch“ zurück und wird erneut gefragt.
+     - Ungültiges JSON wird einmal neu angefordert.
+     - Scheitert die Runde zweimal, ist sie verbraucht.
+   - **Ergebnis:** Verwendet wird die beste Version (Fehler vor vermeidbaren vor allen kreativen Punkten vor Hinweisen).
+   - **Versionen:** Die Seite zeigt jede Version mit ihrer Änderung zur Vorversion (z. B. „13 → 8 Shots · weggelassen: 5.mp4 · Video 27,00 → 20,80 s“) und die verworfenen Antworten.
+6. **Status als Gate:**
+   - **`final`:** keine Fehler, keine kreativen Punkte. Der Export ist frei.
+   - **`needs-repair`:** vermeidbare kreative Punkte offen und Reparaturrunden übrig, oder ein gespeicherter Plan aus älteren Regeln.
+     - Der Export ist gesperrt.
+     - „Plan reparieren“ startet die Reparatur ab diesem Plan.
+   - **`final-with-warnings`** („Final with unresolved creative warnings“): Die Runden sind verbraucht, oder es bleibt nur Unvermeidbares.
+     - Jeder offene Punkt wird mit Begründung angezeigt: vermeidbar oder unvermeidbar, dazu Claudes Erklärung aus `summary.unresolved`.
+     - Export erst nach ausdrücklicher Bestätigung (Checkbox). Im JSON stehen dann `meta.status` und `acceptedUnresolved: true`.
+   - **`failed`:** technische Fehler. Der Export ist gesperrt.
+   - **Unvermeidbar** ist nur die Videolänge, und nur wenn das saubere Material nicht reicht.
+     - Gerechnet wird ohne Wiederholungen, innerhalb der empfohlenen Screentime, mit höchstens zwei Turnarounds und mit Sicherheitsabstand: unter 23,5 s.
+     - Wiederholungen, Überschreitungen und Artefakte lassen sich immer wegschneiden; der Preis ist ein kürzeres Video.
 
 Die technische Prüfung (Schritt 3) ist gegenüber Regeln v1 unverändert. Sie liest den Source-Bereich jetzt aus allen Segmenten eines Shots, damit sie auch Reverse-Shots prüft.
 
 **Regenerate Plan** gibt Claude den vorherigen Plan mit. Ein neuer Plan darf ähnlich sein, wenn der alte gut zur Musik passt.
 
-## Schnittlogik (Regeln v2)
+## Schnittlogik (Regeln v2/v3)
 
 Priorität: 1 Zuschauerinteresse, 2 starke Immobilie zeigen, 3 visueller Flow, 4 musikalischer Flow, 5 Style, 6 technisches Raster.
 
@@ -100,7 +120,7 @@ Priorität: 1 Zuschauerinteresse, 2 starke Immobilie zeigen, 3 visueller Flow, 4
 - **Shot-Längen:** variieren natürlich, ohne erkennbares Muster.
 - **Selling Point früh:** ein sehr starker Clip in den ersten 3–6 s.
 - **Auslassen:** Clips dürfen wegfallen; Nebenräume bleiben weg, wenn sie das Video nicht besser machen.
-- **Länge:** 23 s bis Abschnittsende. Lieber kürzer als mit Wiederholungen füllen. Die Musik läuft dann am Stück und blendet am Videoende aus.
+- **Länge:** 23 s bis Abschnittsende. Das Video muss den Abschnitt nicht füllen. Lieber kürzer als mit Wiederholungen füllen. Die Musik läuft dann am Stück und blendet am Videoende aus. Der Prompt nennt die Materialmenge ohne Wiederholungen, nicht mehr die Abschnittslänge als Ziel.
 - **Wiederholung:** nur mit klar anderem Bereich (höchstens ca. 35–40 % Overlap), nie bei statischen oder Nebenclips.
 - **Speed:** `recommendedPlayback` gilt. Abweichungen nur mit `speedReason`.
 
@@ -154,5 +174,5 @@ Keine UI-Daten, keine Medien, keine Datei-Links.
 
 ## Aufwand
 
-- Ein Claude-Aufruf pro Plan, dazu höchstens drei Korrekturaufrufe. Bringt eine Runde keine Verbesserung, ist früher Schluss. Sie laufen über das Claude-Konto des Viewers.
+- Ein Claude-Aufruf pro Plan, dazu höchstens zwei Reparaturrunden mit je bis zu zwei Anfragen (bei identischer oder ungültiger Antwort). Sie laufen über das Claude-Konto des Viewers.
 - Shotstack wird nicht verwendet.

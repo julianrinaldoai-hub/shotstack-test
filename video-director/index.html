@@ -111,6 +111,11 @@ td.reason { min-width: 240px; }
 .check { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.88rem; }
 .check ul { margin: 2px 0 0; padding-left: 18px; }
 .rev { color: var(--accent); font-weight: 600; }
+.status-banner { display: flex; flex-wrap: wrap; gap: 12px; align-items: start; justify-content: space-between; border-left: 4px solid currentColor; background: var(--soft); border-radius: 0 10px 10px 0; padding: 10px 14px; }
+.status-banner > div { display: grid; gap: 4px; min-width: 0; flex: 1 1 320px; color: var(--ink); }
+.status-banner b { font-family: var(--f-display); }
+.status-banner ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.accept { display: flex; gap: 8px; align-items: start; }
 .p-ok { color: var(--ok); } .p-open { color: var(--warn); } .p-warn { color: var(--warn); } .p-error { color: var(--bad); } .p-info { color: var(--muted); }
 pre { margin: 0; font-family: var(--f-mono); font-size: 0.72rem; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 380px; overflow: auto; background: var(--bg); padding: 10px; border-radius: 8px; }
 details summary { cursor: pointer; font-weight: 600; }
@@ -179,7 +184,7 @@ textarea { width: 100%; font-family: var(--f-mono); font-size: 12px; border: 1px
 
 <script>
 // ===== CORE-BEGIN: pure functions (no AI, no DOM): read inputs, music context, normalise and validate a plan, build the export =====
-const FPS = 25, FRAME = 1 / FPS, RULES_VERSION = "video-director-rules/2 · 2026-10-19", ARTIFACT_URL = "https://claude.ai/artifact/TKVkmNaT5VhMdBe3PUdnQs";
+const FPS = 25, FRAME = 1 / FPS, RULES_VERSION = "video-director-rules/3 · 2026-10-19", ARTIFACT_URL = "https://claude.ai/artifact/TKVkmNaT5VhMdBe3PUdnQs";
 const r3 = x => Math.round(x * 1000) / 1000;
 const num = x => (typeof x === "number" && isFinite(x)) ? x : (x != null && x !== "" && isFinite(+x) ? +x : null);
 const sum = a => a.reduce((s, x) => s + x, 0);
@@ -606,6 +611,71 @@ function reviewPlan(p, clipSet, mc, styleId) {
   return { ok: !repair.length, repair, notes: items.filter(x => x.level === "note"), items };
 }
 const fx3 = x => (Math.round(x * 100) / 100).toFixed(2);
+const kp = n => `${n} ${n === 1 ? "kreativer Punkt" : "kreative Punkte"}`;
+
+// ---- repair gate (code): what a review item asks for, whether it is avoidable with this material, plan status ----
+const MAX_REPAIRS = 2;
+const FIX = {
+  "grid-lengths": "At most 40 % of the shots may be exactly 1, 2 or 3 bars long; put cuts on ordinary beats inside bars too.",
+  "repeated-lengths": "No shot length (within 0.1 s) more than twice.",
+  "cut-every-bar": "Let shots run across several bar starts without a cut; hero shots may span 2-3 bars.",
+  "early-selling-point": "Show one of the strongest clips from the first 3-6 s at the latest, for at least 0.8 s.",
+  "reuse-overlap": "Drop the second use, or use a range with at most 35 % overlap.",
+  "reuse-static": "Use the static clip only once.",
+  "secondary-screen-time": "Shorten the secondary clip or leave it out.",
+  "over-max": "Shorten, use the clip once, give the time to other strong clips, or make the video shorter.",
+  "secondary-share": "Leave secondary clips out or keep them very short.",
+  "speed-vs-analysis": "Set speed 1.0 (the analysis says normal).",
+  "speed-reason": "Set speed 1.0, or give a real creative reason in speedReason.",
+  "artifact": "Leave the clip out or use a range without the artefact.",
+  "too-short": "Extend with a longer hero shot or a reverse turnaround, never with repeats.",
+  "reverse-count": "Keep reverse for the one or two shots where it helps most.",
+  "reverse-risk": "No reverse on this clip.", "reverse-artifact": "No reverse on this clip.",
+  "boomerang": "At most one direction change per shot.", "hard-turn": "Set turnaround.enabled = true.", "reverse-reason": "Give speedReason or play forward."
+};
+// clean material without repeats: per clip its safe range capped by the recommended screen time; the two push-ins that gain most
+// from one reverse turnaround (the review allows about two reverse shots) may add up to 60 % of their range
+function materialCapacity(clipSet, turnSlots = 2) {
+  const per = clipSet.clips.map(c => {
+    const span = Math.max(0, c.safe[1] - c.safe[0]), art = sum(c.problems.filter(p => ARTIFACT.test(p.type + " " + p.note)).map(p => overlap(p.from, p.to, c.safe[0], c.safe[1])));
+    const txt = [c.roomType, c.description, c.camera?.note].join(" "), moving = !/static|statisch|locked/i.test(String(c.camera?.type ?? c.camera ?? ""));
+    const clean = span > 0 && art < 0.7 * span, canTurn = clean && moving && !REVERSE_RISK.test(txt) && !art;
+    const limit = c.maxScreen == null ? span * 1.6 : "CDE".includes(c.priorityClass) ? c.maxScreen : c.maxScreen * 1.25 + 0.2, base = clean ? Math.min(limit, span) : 0;
+    return { ref: c.ref, filename: c.filename, priorityClass: c.priorityClass, canTurn, clean, base: r3(base), gain: canTurn ? r3(Math.max(0, Math.min(limit - base, 0.6 * span))) : 0 };
+  });
+  const top = new Set([...per].filter(x => x.gain > 0).sort((a, b) => b.gain - a.gain).slice(0, turnSlots).map(x => x.ref));
+  per.forEach(x => { x.turnCounted = top.has(x.ref); x.seconds = r3(x.base + (x.turnCounted ? x.gain : 0)); });
+  return { total: r3(sum(per.map(x => x.seconds))), primary: r3(sum(per.filter(x => "AB".includes(x.priorityClass)).map(x => x.seconds))), per };
+}
+// only the length is bound to the material: repeats, overruns and artefacts can always be cut, the price is a shorter video
+const MATERIAL_BOUND = new Set(["too-short"]);
+function classifyReview(rev, clipSet) {
+  const cap = materialCapacity(clipSet), short = cap.total < 23.5; // margin: the estimate ignores overlaps between uses and short burst shots
+  for (const x of rev.repair) {
+    x.fix = FIX[x.id] || "";
+    x.avoidable = !(short && MATERIAL_BOUND.has(x.id));
+    x.why = x.avoidable ? `Vermeidbar: mit diesem Material lösbar (sauberes Material ohne Wiederholung etwa ${fx3(cap.total)} s).` : `Unvermeidbar: sauberes Material ohne Wiederholung reicht nur für etwa ${fx3(cap.total)} s (mit zwei Turnarounds, innerhalb der empfohlenen Screentime); für 23 s müsste der Plan an anderer Stelle eine Regel brechen.`;
+  }
+  rev.capacity = cap; rev.avoidable = rev.repair.filter(x => x.avoidable); rev.unavoidable = rev.repair.filter(x => !x.avoidable);
+  return rev;
+}
+// final: no repair points; needs-repair: points left and repair rounds left; final-with-warnings: rounds used up; failed: technical errors
+function planStatus(val, rev, repairsDone) {
+  if (!val.passed) return "failed";
+  if (rev.ok) return "final";
+  return repairsDone < MAX_REPAIRS && rev.avoidable.length ? "needs-repair" : "final-with-warnings";
+}
+const shotKey = s => [s.ref, s.ts, s.te, s.ss, s.se, s.direction].map(v => typeof v === "number" ? v.toFixed(2) : v).join("|");
+// what changed from one plan version to the next (a repair must really change the edit)
+function planDiff(a, b) {
+  const ka = a.shots.map(shotKey), kb = b.shots.map(shotKey), used = p => new Set(p.shots.filter(s => s.clip).map(s => s.clip.filename));
+  const ua = used(a), ub = used(b), changed = kb.filter(k => !ka.includes(k)).length + ka.filter(k => !kb.includes(k)).length;
+  const rev = p => p.shots.filter(s => s.segs.some(g => g.dir < 0)).length;
+  return { identical: changed === 0 && Math.abs(a.videoDuration - b.videoDuration) < 0.01, changedShots: kb.filter(k => !ka.includes(k)).length,
+    shots: [a.shots.length, b.shots.length], duration: [a.videoDuration, b.videoDuration], dropped: [...ua].filter(f => !ub.has(f)), added: [...ub].filter(f => !ua.has(f)), reverse: [rev(a), rev(b)] };
+}
+const diffText = d => d.identical ? "unverändert" : [`${d.shots[0]} → ${d.shots[1]} Shots`, `${d.changedShots} neu oder geändert`, d.duration[0] !== d.duration[1] && `Video ${fx3(d.duration[0])} → ${fx3(d.duration[1])} s`,
+  d.dropped.length && `weggelassen: ${d.dropped.join(", ")}`, d.added.length && `neu: ${d.added.join(", ")}`, d.reverse[0] !== d.reverse[1] && `Reverse ${d.reverse[0]} → ${d.reverse[1]}`].filter(Boolean).join(" · ");
 
 // ---- export: meta, music, style, timeline, shots, validation, summary (no UI data) ----
 // Shotstack mapping per shot: trim + speed (a number, or a Tween array; a negative speed plays backwards, see PLAYBACK_SUPPORT)
@@ -627,11 +697,12 @@ function playbackOut(s) {
   let t = s.ts;
   const segments = s.segs.length > 1 ? s.segs.map(g => { const d = segTime(g), o = { sourceStart: g.from, sourceEnd: g.to, direction: dirName(g.dir), speed: g.v, timelineStart: r3(t), timelineEnd: r3(t + d), turnaroundIn: g.tauIn, turnaroundOut: g.tauOut }; t += d; return o; }) : null;
   return { playback: s.segs.length === 1 ? { direction: dirName(s.segs[0].dir), speed: s.segs[0].v } : { direction: s.direction, speed: null },
-    segments, turnaround: s.segs.length > 1 ? { enabled: s.segs.some(g => g.tauIn > 0), type: "smooth-speed-ramp", minSpeed: 0, duration: r3(sum(s.segs.map(g => g.tauIn + g.tauOut)) / Math.max(1, s.segs.length - 1)) } : null,
+    segments, turnaround: s.segs.length > 1 ? { enabled: s.segs.some(g => g.tauIn > 0), type: "smooth", profile: "linear speed ramp to 0 and back", minSpeed: 0, duration: r3(sum(s.segs.map(g => g.tauIn + g.tauOut)) / Math.max(1, s.segs.length - 1)) } : null,
     speedReason: s.speedReason || null, builder: shotstackPlayback(s) };
 }
 function buildPlanExport(st) {
-  const { plan: p, val, clipSet, music, sec, mc, ai, styleId, attempts, createdAt } = st, rev = st.rev || reviewPlan(p, clipSet, mc, styleId);
+  const { plan: p, val, clipSet, music, sec, mc, ai, styleId, attempts, createdAt } = st, rev = st.rev?.capacity ? st.rev : classifyReview(st.rev || reviewPlan(p, clipSet, mc, styleId), clipSet);
+  const status = st.status || planStatus(val, rev, st.repairsDone ?? MAX_REPAIRS);
   const used = new Set(p.shots.filter(s => s.clip).map(s => s.clip.ref));
   const omittedReason = Object.fromEntries((ai.summary?.omitted || []).map(o => [o.clip, o.reason]));
   const shots = p.shots.map(s => ({
@@ -644,7 +715,11 @@ function buildPlanExport(st) {
     reason: s.reason }));
   return {
     meta: { schema: "video-director-plan@1", createdAt, exportedAt: new Date().toISOString(), generator: { artifact: "Video Director", url: ARTIFACT_URL, rules: RULES_VERSION },
-      planner: "claude-interpretation", arithmetic: "derived-code", attempts: attempts.map(a => ({ kind: a.kind, at: a.at, errors: a.errors, warnings: a.warnings, creativeRepairs: a.repairs ?? null })), playbackSupport: PLAYBACK_SUPPORT,
+      planner: "claude-interpretation", arithmetic: "derived-code", rules: st.rules || RULES_VERSION,
+      status, statusLabel: { final: "final", "final-with-warnings": "Final with unresolved creative warnings", "needs-repair": "needs-repair", failed: "failed" }[status], acceptedUnresolved: status === "final-with-warnings" ? !!st.accepted : null,
+      planVersion: (st.bestAttempt ?? attempts.length - 1) + 1, repairRounds: st.repairsDone ?? null,
+      versions: attempts.map((a, i) => ({ version: i + 1, kind: a.kind, at: a.at, errors: a.errors, warnings: a.warnings, creativeRepairs: a.repairs ?? null, avoidable: a.avoidable ?? null, changeFromPrevious: a.diff || null })),
+      rejectedAnswers: (st.rejected || []).map(r => ({ forVersion: r.forVersion, at: r.at, reason: r.reason })), playbackSupport: PLAYBACK_SUPPORT,
       inputs: { clipAnalysis: clipSet.source, musicAnalysis: music.source } },
     music: { trackId: music.trackId, filename: music.filename, bpm: music.bpm, barLength: music.barLen,
       section: { start: sec.start, end: sec.end, duration: sec.duration, selection: sec.selection, candidateId: sec.candidateId },
@@ -656,7 +731,7 @@ function buildPlanExport(st) {
       end: { atVideo: p.videoDuration, atTrack: r3(mc.s0 + p.videoDuration), alignedTo: alignOf(mc, p.videoDuration).label } },
     shots,
     validation: { passed: val.passed, errorCount: val.errors.length, warningCount: val.warnings.length, checks: val.checks.map(c => ({ id: c.id, label: c.label, status: c.status, items: c.items })), corrections: p.corrections,
-      creativeReview: { ok: rev.ok, open: rev.repair, notes: rev.notes } },
+      creativeReview: { ok: rev.ok, open: rev.repair.map(x => ({ id: x.id, msg: x.msg, target: x.fix, avoidable: x.avoidable, why: x.why, shot: x.shot ?? null, claudeReason: (ai.summary?.unresolved || []).find(u => u.id === x.id)?.reason || null })), notes: rev.notes, materialCapacitySeconds: rev.capacity.total } },
     summary: { style: STYLES[styleId].label, sourceMusicTrack: music.filename, selectedMusicSection: { start: sec.start, end: sec.end, duration: sec.duration },
       finalVideoDuration: p.videoDuration, numberOfShots: p.shots.length, uniqueClips: used.size,
       reusedClips: clipSet.clips.filter(c => p.shots.filter(s => s.clip === c).length > 1).map(c => c.filename),
@@ -701,11 +776,11 @@ function buildPlanExport(st) {
     drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); read(e.dataTransfer.files[0]); });
     inp.addEventListener("change", () => { read(inp.files[0]); inp.value = ""; });
   }
-  document.addEventListener("change", e => { if (e.target.id === "sec-select") { S.secKey = e.target.value; store.set("sec", S.secKey); render(); } });
+  document.addEventListener("change", e => { if (e.target.id === "accept-warnings") { S.accept = e.target.checked; render(); return; } if (e.target.id === "sec-select") { S.secKey = e.target.value; store.set("sec", S.secKey); render(); } });
   document.addEventListener("click", e => {
     const b = e.target.closest("button[data-style]"); if (b) { S.style = b.dataset.style; store.set("style", S.style); render(); return; }
     const x = e.target.closest("button[data-act]"); if (!x) return;
-    if (x.dataset.act === "export") exportPlan(); if (x.dataset.act === "copy") copyPlan();
+    if (x.dataset.act === "export") exportPlan(); if (x.dataset.act === "copy") copyPlan(); if (x.dataset.act === "repair") repairExisting();
   });
   const ready = () => S.clip?.data && S.music?.data && sectionOf(S.music.data, S.secKey);
 
@@ -720,7 +795,7 @@ function buildPlanExport(st) {
       segments: c.segments, bestUse: c.bestUse, screenTimeReason: c.screenTimeReason, uniqueness: c.uniqueness, similarTo: c.similarTo, relativeReason: c.relativeReason });
   }
   function basePrompt(cs, music, sec, mc, styleId) {
-    const st = STYLES[styleId], safeTotal = r3(sum(cs.clips.map(c => Math.max(0, c.safe[1] - c.safe[0]))));
+    const st = STYLES[styleId];
     return `You are the director and editor of a short real-estate video. You plan the edit only. Two finished analyses are the source of truth: a clip analysis (content, final weights, usable source ranges, problems per clip) and a music analysis (beats, bars, energy, structure). Respect them: do not re-rate clips, re-classify rooms, invent music events or recompute beats, and never ignore usable ranges.
 
 STYLE: ${st.label}: ${st.prompt} The style sets the creative direction; it is not a template. Typical shot lengths: ${st.avg} (guidance only).
@@ -742,9 +817,9 @@ Key moments, interpreted: ${C(mc.kmInt)}
 PROPERTY: ${cs.source.setName || "set"}. ${cs.overview}
 Selling points: ${C(cs.sellingPoints)}
 Similar clips: ${C(cs.similarGroups)}
-CLIPS, ranked; weights are final after the comparison of all clips. SAFE = usable range minus the weak start/end (hard limit). screenTime = recommended total [min, max] s for the whole video:
+CLIPS, ranked; weights are final after the comparison of all clips. SAFE = usable range minus the weak start/end (hard limit). screenTime = recommended total [min, max] s for the whole video if the clip is used at all (secondary clips may simply be left out):
 ${cs.clips.map(clipLine).join("\n")}
-Material: SAFE source time of all clips together ${safeTotal} s; the section needs ${r3(mc.L)} s.
+Material: clean source without repeats, capped by the recommended screen time and counting one reverse turnaround on suitable push-ins: about ${materialCapacity(cs).total} s. The video does NOT have to fill the section: any length from 23 s to ${r3(mc.L)} s is fine. If the strong material carries 23.4 s, the video is 23.4 s long. Never repeat clips to reach a length.
 
 THINK FIRST and write it into "directorAnalysis": 1. What sells this property? 2. Which clips are strongest? 3. Which only support, and which add nothing to this video? 4. Which source ranges are truly good, and which could carry a reverse move? 5. How does this music section develop? 6. Where are the strong beats, downbeats, drops and energy changes that matter? 7. Which dramaturgy follows from that? Only then build the timeline.
 
@@ -753,7 +828,7 @@ Before every shot ask: without a timeline and without rules in front of me, woul
 - Music markers are orientation points, not a grid. A shot may start inside a bar on an ordinary beat, span several bars, use only part of a bar, or deliberately skip a marker. Not every bar start needs a cut. Cut first for picture and story, then let it sit cleanly on the music (a beat, a downbeat, a drop, an energy change).
 - Shot lengths vary naturally with content and music, e.g. 0.6, 0.9, 1.3, 1.8, 2.2, 2.7, 3.1, 3.6 s. No forced random values, but no visible pattern: avoid many shots of exactly one bar (${fx(mc.barLen, 2)} s) or two bars, and avoid repeating the same length.
 - Show a very strong selling point early: within the first 3-6 s at least one of the strongest clips (exterior, pool, living room, strong terrace, kitchen or view, as the analysis ranks them). Do not save every strong clip for a later drop; a hero clip may return at a peak with a different source range.
-- Not every clip has to be used. Leave out bathroom, WC, dressing room, office, hallway and other secondary clips when they do not make this video better. Ask "which shots make this video better?", not "how do I fit all clips in".
+- Not every clip has to be used: 6 of 8 clips is a perfectly good plan. Leave out bathroom, WC, dressing room, office, hallway and other secondary clips when they do not make this video better. Ask "which shots make this video better?", not "how do I fit all clips in".
 - Video length: between 23 s and ${r3(mc.L)} s (the section). If there is not enough strong material, make the video shorter instead of repeating: a strong 23.5 s video beats a 27 s one with filler. End on a musically clean point (a bar start or a strong beat); the music then fades out there.
 - The final weighting must be visible: primary clips (class A/B, high contentWeight and screenTimePriority) get clearly more screen time and the key musical moments; secondary clips stay short or are left out. The concrete clip analysis decides, not the room name.
 - No fixed room order and no fixed rhythm template. The best edit matters more than being different.
@@ -764,9 +839,9 @@ SOURCE, REPEATS, SPEED
 - Playback speed: respect "playback" from the analysis. With "normal", stay at 1.0 unless picture and music both clearly gain from a change; then give "speedReason". Never change speed to squeeze or stretch material; never with "avoid speed change".
 - Speed ramps (forward only): rare and purposeful (a build into a strong downbeat, a drop, an energy rise) on a stable camera range. "points": [{"atSource": source s, "speed": n}], ascending, inside the shot's source range; speed changes linearly between points.
 
-REVERSE AND DIRECTION CHANGES (creative tool, not a default)
+REVERSE AND DIRECTION CHANGES (creative tool, not a default, but check it actively for every strong push-in: a forward move that turns smoothly and pulls back can make a hero shot longer without its weak end)
 - A shot may play a range backwards ("playback": {"direction": "reverse", "speed": n}, sourceStart > sourceEnd), or change direction once inside one continuous shot: "segments": [{"sourceStart": 0.6, "sourceEnd": 2.8, "speed": 1.0}, {"sourceStart": 2.8, "sourceEnd": 1.4, "speed": 1.0}]. The camera moves in, reaches a good point, the move reverses and pulls back out. Use it to let a strong clip run longer without its weak end, to pull back before a drop, to move out of a room after a peak, or to stretch a hero shot over a build.
-- A direction change gets a smooth turnaround (speed falls to 0 and rises again): "turnaround": {"enabled": true, "duration": 0.4-0.8 s}. Never a hard flip from 1.0 to -1.0.
+- A direction change gets a smooth turnaround (speed falls to 0 and rises again): "turnaround": {"enabled": true, "type": "smooth", "duration": 0.4-0.8 s}. Never a hard flip from 1.0 to -1.0.
 - At most one direction change per shot, and only a few such shots per video; no forward-reverse-forward boomerangs.
 - Only on suitable ranges: calm camera moves, clean forward moves, architecture, living room, kitchen, exterior, terrace, stable geometry. Not on visible AI artefacts, strong light changes, water or anything moving that looks wrong backwards (pool water, people, curtains, leaves), morphing or bad end frames. Reverse never rescues a bad range: it turns at or before the end of SAFE, it never runs into a weak range first.
 - Every reverse shot needs "speedReason" (why the picture and the music profit).
@@ -782,7 +857,7 @@ SELF-REVIEW before answering: look at your shot list as a viewer. Does it look l
 OUTPUT JSON only. Write every free-text value in German, concise (reason at most 30 words). Use the clip ids (K1...).
 {"directorAnalysis": {"sells": string, "strongest": string, "supporting": string, "goodRanges": string, "musicDevelopment": string, "syncPoints": string, "dramaturgy": string},
  "creative": {"opening": string, "build": string, "energyMiddle": string, "heroMoments": string, "finale": string},
- "summary": {"overallDramaturgy": string, "editingConcept": string, "heroClips": [clip id], "omitted": [{"clip": clip id, "reason": string}], "selfReview": string},
+ "summary": {"overallDramaturgy": string, "editingConcept": string, "heroClips": [clip id], "omitted": [{"clip": clip id, "reason": string}], "selfReview": string, "unresolved": [{"id": review point id, "reason": string}] (only in a repair: points that are impossible with this material)},
  "videoDuration": number,
  "shots": [{"clip": clip id, "timelineStart": number, "timelineEnd": number,
    "sourceStart": number, "sourceEnd": number, "playback": {"direction": "forward" or "reverse", "speed": number},
@@ -797,81 +872,135 @@ OUTPUT JSON only. Write every free-text value in German, concise (reason at most
   function regenPrompt(prev) {
     return `\n\nA PREVIOUS PLAN for the same inputs exists (compact, below). Make a new plan. Do not change it just to be different: keep what objectively fits the music, improve what is weaker. Quality over variety.\nPrevious editing concept: ${prev.summary?.editingConcept || ""}\nPrevious shots: ${compactShots(prev)}`;
   }
-  function repairPrompt(ai, val, rev, p) {
-    const list = a => a.map(x => `- ${x.msg}`).join("\n") || "- none";
-    return `\n\nYOUR PREVIOUS ANSWER was checked by code against both analyses and reviewed for how human the edit feels. Fix every ERROR and every CREATIVE point; fix the WARNINGS where that makes the edit better. Leaving a clip out, ending the video earlier (not below 23 s) or using a different range is often the right fix. Return the complete corrected plan in the same JSON format; keep what was good (concept, analysis, strong shots).
-ERRORS:\n${list(val.errors)}\nCREATIVE (repair):\n${list(rev.repair)}\nWARNINGS:\n${list(val.warnings)}
-Code corrections already applied (arithmetic): ${C(p.corrections.map(c => c.msg))}
-Your previous plan: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: ai.shots })}`;
+  function repairPrompt(cur, n, L, extra) {
+    const { ai, plan: p, val, rev } = cur, cs = S.clip.data, list = a => a.map(x => `- ${x.msg}`).join("\n") || "- none";
+    const usage = rev.capacity.per.map(x => { const c = cs.clips.find(k => k.ref === x.ref), sh = p.shots.filter(s => s.clip === c);
+      return `- ${x.ref} ${x.filename} (${c.roomType}, class ${c.priorityClass}): SAFE ${c.safe.join("-")} s, max ${c.maxScreen ?? "?"} s, reverse turnaround ${x.canTurn ? "suitable" : "not suitable"}${x.clean ? "" : ", visible artefact"}; in V${n}: ${sh.length ? `${sh.length} use(s), ${fx3(sum(sh.map(s => s.dur)))} s, ranges ${sh.map(s => `${fx3(s.lo)}-${fx3(s.hi)}`).join(", ")}` : "not used"}`; }).join("\n");
+    return `\n\nPLAN V${n} (your previous plan, at the end) was checked by code against both analyses and reviewed the way a senior editor would review it. It is NOT final. Write PLAN V${n + 1}.
+Rebuild the edit where needed instead of patching numbers. Allowed and expected: remove shots, leave clips out completely, reorder, change source ranges, shot lengths and cut points, shorten the video (anything from 23 s to ${r3(L)} s; the music simply ends earlier inside the section, it is never cut), remove repeats or plan a clearly different reuse, add a reverse turnaround on a suitable push-in, change speed and transitions. Keep only what is really good.
+Every CREATIVE point must be gone in V${n + 1}. Only if a point is truly impossible with this material, keep it and list it in "summary.unresolved" with the reason.
+ERRORS (must be fixed):\n${list(val.errors)}
+CREATIVE (must be fixed; "target" is what V${n + 1} has to reach):\n${rev.repair.map(x => `- [${x.id}] ${x.msg} -> target: ${x.fix}${x.avoidable ? "" : " (code note: may be unavoidable with this material)"}`).join("\n")}
+WARNINGS (fix where it helps):\n${list(val.warnings)}
+MATERIAL: clean material without repeats about ${fx3(rev.capacity.total)} s. Per clip:\n${usage}
+PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: ai.shots })}${extra || ""}`;
   }
   function extractJSON(text) {
     const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, ""), a = t.indexOf("{"), b = t.lastIndexOf("}");
-    if (a < 0 || b < a) throw { code: "invalid_json", message: "Keine JSON-Antwort." };
-    return JSON.parse(t.slice(a, b + 1));
+    if (a < 0 || b < a) throw { code: "invalid_json", message: "Keine JSON-Antwort.", text };
+    try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { throw { code: "invalid_json", message: e.message, text }; }
   }
   async function ask(prompt, label) {
     S.live = ""; const t0 = Date.now(), ctl = new AbortController(); S.ctl = ctl;
     const res = await S.sample(prompt, { modelTier: "complex", cache: false, signal: ctl.signal, onText: ({ text }) => { S.live = text; const el = $("live"); if (el) el.textContent = `${label}: ${text.length.toLocaleString("de-DE")} Zeichen geschrieben …`; } });
-    if (res.truncated) throw { code: "truncated", message: "Die Antwort wurde abgeschnitten." };
+    if (res.truncated) throw { code: "truncated", message: "Die Antwort wurde abgeschnitten.", text: res.text };
     return { ai: extractJSON(res.text), text: res.text, ms: Date.now() - t0, tier: res.modelTierApplied };
+  }
+  const evaluate = (ai, cs, mc, styleId) => { const plan = normalizePlan(ai, cs, mc, styleId), val = validatePlan(plan, cs, mc, styleId); return { ai, plan, val, rev: classifyReview(reviewPlan(plan, cs, mc, styleId), cs) }; };
+  const score = x => x.val.errors.length * 1000 + x.rev.avoidable.length * 20 + x.rev.repair.length * 10 + x.val.warnings.length;
+  const needsRepair = x => x.val.errors.length > 0 || x.rev.avoidable.length > 0;
+  const ERRMSG = { not_granted: "Claude wurde für diese Seite nicht freigegeben.", rate_limited: "Zu viele Anfragen. Bitte kurz warten.", cancelled: "Abgebrochen.", truncated: "Die Antwort war zu lang und wurde abgeschnitten.", invalid_json: "Claude hat kein gültiges JSON geliefert." };
+  function pushVersion(run, x, kind, r, diff) {
+    run.attempts.push({ n: run.attempts.length + 1, kind, at: new Date().toISOString(), ms: r?.ms ?? 0, tier: r?.tier ?? null, errors: x.val.errors.length, warnings: x.val.warnings.length, repairs: x.rev.repair.length, avoidable: x.rev.avoidable.length,
+      corrections: x.plan.corrections.length, raw: r?.text ?? "", ai: x.ai, diff: diff ? diffText(diff) : null, errorList: [...x.val.errors, ...x.rev.repair].map(e => e.msg) });
+    log(`Plan V${run.attempts.length}${kind === "repair" ? " (Reparatur)" : kind === "restored" ? " (gespeicherter Plan)" : ""}: ${x.plan.shots.length} Shots, ${fx(x.plan.videoDuration, 1)} s, ${x.val.errors.length} Fehler, ${kp(x.rev.repair.length)}${x.rev.unavoidable.length ? ` (${x.rev.unavoidable.length} unvermeidbar)` : ""}, ${x.val.warnings.length} Hinweise${diff ? ` · ${diffText(diff)}` : ""}${r?.ms ? ` (${Math.round(r.ms / 1000)} s)` : ""}.`, x.val.errors.length ? "bad" : x.rev.repair.length ? "warn" : "ok");
+  }
+  // V1 -> review -> V2 -> review -> V3 at most; an identical or unusable answer does not count as a version and is requested once more
+  async function repairLoop(run, cur, ctx) {
+    const { cs, music, sec, mc, styleId } = ctx;
+    while (needsRepair(cur) && run.repairsDone < MAX_REPAIRS) {
+      const n = run.attempts.length;
+      log(`Plan V${n} ist nicht final (${[cur.val.errors.length && `${cur.val.errors.length} Fehler`, cur.rev.avoidable.length && `${kp(cur.rev.avoidable.length)} vermeidbar`].filter(Boolean).join(", ")}). Claude baut Plan V${n + 1} …`);
+      let next = null, extra = "";
+      for (let tries = 0; tries < 2 && !next; tries++) {
+        let r;
+        try { r = await ask(basePrompt(cs, music, sec, mc, styleId) + repairPrompt(cur, n, mc.L, extra), `Plan V${n + 1}`); }
+        catch (e) { if (e?.code === "cancelled") throw e; run.rejected.push({ forVersion: n + 1, at: new Date().toISOString(), reason: ERRMSG[e?.code] || String(e?.message || e), raw: e?.text || "" }); log(`Antwort für V${n + 1} unbrauchbar (${ERRMSG[e?.code] || e?.message || e}).${tries ? "" : " Neue Anforderung …"}`, "warn"); extra = ""; continue; }
+        const cand = evaluate(r.ai, cs, mc, styleId), d = planDiff(cur.plan, cand.plan);
+        if (d.identical) {
+          run.rejected.push({ forVersion: n + 1, at: new Date().toISOString(), reason: `identisch mit V${n}`, raw: r.text });
+          log(`Die Antwort für V${n + 1} ist identisch mit V${n}. Die Reparatur gilt als fehlgeschlagen${tries ? "" : "; neue Anforderung …"}`, "warn");
+          extra = `\n\nYOUR LAST ANSWER WAS IDENTICAL TO PLAN V${n}. That repair failed. The creative points above are still open: change the edit itself now (shots, clips, ranges, lengths, cut points, video length).`;
+          continue;
+        }
+        next = { ...cand, r, d };
+      }
+      run.repairsDone++;
+      if (!next) { log(`Reparatur zu V${n + 1} fehlgeschlagen. Der beste bisherige Plan bleibt, Status wird markiert.`, "bad"); break; }
+      pushVersion(run, next, "repair", next.r, next.d); cur = next;
+    }
+    return cur;
+  }
+  function finishRun(run, versions, ctx) {
+    const best = versions.reduce((b, x) => score(x) < score(b) ? x : b, versions[0]), idx = versions.indexOf(best);
+    Object.assign(run, best, { clipSet: ctx.cs, music: ctx.music, mc: ctx.mc, bestAttempt: idx });
+    run.status = planStatus(best.val, best.rev, run.repairsDone);
+    if (idx !== versions.length - 1) log(`Verwendet wird Plan V${idx + 1}, er schneidet besser ab als V${versions.length}.`);
+    const msg = { final: [`Plan V${idx + 1} ist final: keine Fehler, keine offenen kreativen Punkte.`, "ok"], "needs-repair": [`Plan V${idx + 1} braucht noch eine Reparatur (${best.rev.avoidable.length} vermeidbar).`, "warn"],
+      "final-with-warnings": [`Plan V${idx + 1}: Final with unresolved creative warnings (${best.rev.repair.length} offen, ${best.rev.unavoidable.length} davon unvermeidbar). Export erst nach Bestätigung.`, "warn"], failed: [`Plan V${idx + 1} hat noch ${best.val.errors.length} technische Fehler und wird nicht exportiert.`, "bad"] }[run.status];
+    log(...msg);
+    S.accept = false; S.run = run; persistRun();
   }
   async function generate(regen) {
     if (!ready() || S.busy || !S.sample) return;
-    const cs = S.clip.data, music = S.music.data, sec = sectionOf(music, S.secKey), mc = musicCtx(music, sec), styleId = S.style;
-    const prev = regen ? S.run?.ai : null;
-    const base = basePrompt(cs, music, sec, mc, styleId) + (prev ? regenPrompt(prev) : "");
+    const cs = S.clip.data, music = S.music.data, sec = sectionOf(music, S.secKey), mc = musicCtx(music, sec), styleId = S.style, ctx = { cs, music, sec, mc, styleId };
+    const prev = regen ? S.run?.ai : null, base = basePrompt(cs, music, sec, mc, styleId) + (prev ? regenPrompt(prev) : "");
     S.busy = true; render();
-    const run = { styleId, sec, attempts: [], createdAt: new Date().toISOString(), promptBytes: new Blob([base]).size };
+    const run = { styleId, sec, attempts: [], rejected: [], repairsDone: 0, rules: RULES_VERSION, createdAt: new Date().toISOString(), promptBytes: new Blob([base]).size };
     try {
-      log(`${regen ? "Neuer Plan (Regenerate)" : "Plan"} für ${STYLES[styleId].label}, Musik ${fx(sec.start)}–${fx(sec.end)} s: Claude denkt zuerst über Immobilie und Musik nach …`);
-      let r = await ask(base, "Plan"), ai = r.ai, kind = regen ? "regenerate" : "generate", best = null;
-      const MAX_REPAIR = 3, score = x => x.val.errors.length * 100 + x.rev.repair.length * 10 + x.val.warnings.length;
-      for (let round = 0; ; round++) {
-        const p = normalizePlan(ai, cs, mc, styleId), val = validatePlan(p, cs, mc, styleId), rev = reviewPlan(p, cs, mc, styleId), cur = { ai, plan: p, val, rev, bestAttempt: round };
-        run.attempts.push({ kind, at: new Date().toISOString(), ms: r.ms, tier: r.tier, errors: val.errors.length, warnings: val.warnings.length, repairs: rev.repair.length, corrections: p.corrections.length, raw: r.text, errorList: [...val.errors, ...rev.repair].map(e => e.msg) });
-        log(`${kind === "repair" ? `Korrektur ${round}` : "Plan"}: ${p.shots.length} Shots, ${fx(p.videoDuration, 1)} s, ${val.errors.length} Fehler, ${rev.repair.length} kreative Punkte, ${val.warnings.length} Hinweise (${Math.round(r.ms / 1000)} s).`, val.errors.length ? "bad" : rev.repair.length ? "warn" : "ok");
-        const improved = !best || score(cur) < score(best);
-        if (improved) best = cur;
-        if ((!val.errors.length && !rev.repair.length) || round >= MAX_REPAIR) break;
-        if (round > 0 && !improved) { log("Die letzte Korrekturrunde hat den Plan nicht verbessert; weitere Runden werden gespart."); break; }
-        log(`Plan wird verbessert (Runde ${round + 1} von ${MAX_REPAIR}): ${[val.errors.length && `${val.errors.length} Fehler`, rev.repair.length && `${rev.repair.length} kreative Punkte`].filter(Boolean).join(", ")} …`);
-        kind = "repair";
-        try { r = await ask(basePrompt(cs, music, sec, mc, styleId) + repairPrompt(ai, val, rev, p), `Korrektur ${round + 1}`); ai = r.ai; }
-        catch (e) { if (e?.code === "cancelled") throw e; log(`Korrekturrunde fehlgeschlagen (${e?.code || e?.message || e}); der beste bisherige Plan bleibt.`, "warn"); break; }
-      }
-      Object.assign(run, best, { clipSet: cs, music, mc });
-      if (best.bestAttempt !== run.attempts.length - 1) log(`Verwendet wird ${best.bestAttempt ? `Korrektur ${best.bestAttempt}` : "der erste Plan"}, weil er am besten abschneidet.`);
-      if (best.val.errors.length) log(`Es bleiben ${best.val.errors.length} Fehler. Der Plan ist markiert und sollte neu erzeugt werden.`, "bad");
-      else if (best.rev.repair.length) log(`Technisch bestanden; ${best.rev.repair.length} kreative Punkte ließen sich nicht ganz lösen und sind markiert.`, "warn");
-      else log("Plan bestanden: keine Fehler, keine offenen kreativen Punkte.", "ok");
-      S.run = run; persistRun();
+      log(`${regen ? "Neuer Plan (Regenerate)" : "Neuer Plan"} für ${STYLES[styleId].label}, Musik ${fx(sec.start)}–${fx(sec.end)} s: Claude denkt zuerst über Immobilie und Musik nach …`);
+      const r = await ask(base, "Plan V1"), first = evaluate(r.ai, cs, mc, styleId);
+      pushVersion(run, first, regen ? "regenerate" : "generate", r);
+      await repairLoop(run, first, ctx);
+      finishRun(run, run.attempts.map(a => evaluate(a.ai, cs, mc, styleId)), ctx);
     } catch (e) {
-      const msg = { not_granted: "Claude wurde für diese Seite nicht freigegeben.", rate_limited: "Zu viele Anfragen. Bitte kurz warten.", cancelled: "Abgebrochen.", truncated: "Die Antwort war zu lang und wurde abgeschnitten. Bitte erneut versuchen.", invalid_json: "Claude hat kein gültiges JSON geliefert. Bitte erneut versuchen." }[e?.code] || `Fehler: ${e?.message || e}`;
-      log(msg, e?.code === "cancelled" ? "" : "bad");
+      log(ERRMSG[e?.code] ? `${ERRMSG[e.code]}${e.code === "cancelled" ? "" : " Bitte erneut versuchen."}` : `Fehler: ${e?.message || e}`, e?.code === "cancelled" ? "" : "bad");
+      if (run.attempts.length) finishRun(run, run.attempts.map(a => evaluate(a.ai, cs, mc, styleId)), ctx);
     } finally { S.busy = false; S.ctl = null; render(); }
+  }
+  // repair a stored plan (e.g. made with older rules): it becomes V1 of a new run
+  async function repairExisting() {
+    if (!S.run?.plan || S.busy || !S.sample || !ready()) return;
+    const old = S.run, cs = S.clip.data, music = S.music.data, sec = old.sec, mc = musicCtx(music, sec), styleId = old.styleId, ctx = { cs, music, sec, mc, styleId };
+    const fresh = old.rules !== RULES_VERSION;
+    const run = fresh ? { styleId, sec, attempts: [], rejected: [], repairsDone: 0, rules: RULES_VERSION, createdAt: new Date().toISOString(), promptBytes: old.promptBytes } : old;
+    S.busy = true; render();
+    try {
+      let cur = evaluate(old.ai, cs, mc, styleId);
+      if (fresh) pushVersion(run, cur, "restored", null);
+      else { run.attempts = run.attempts.slice(0, (old.bestAttempt ?? run.attempts.length - 1) + 1); }
+      await repairLoop(run, cur, ctx);
+      finishRun(run, run.attempts.map(a => evaluate(a.ai, cs, mc, styleId)), ctx);
+    } catch (e) { log(ERRMSG[e?.code] || `Fehler: ${e?.message || e}`, e?.code === "cancelled" ? "" : "bad"); if (run.attempts.length) finishRun(run, run.attempts.map(a => evaluate(a.ai, cs, mc, styleId)), ctx); }
+    finally { S.busy = false; S.ctl = null; render(); }
   }
   $("btn-generate").addEventListener("click", () => generate(false));
   $("btn-regenerate").addEventListener("click", () => generate(true));
   $("btn-stop").addEventListener("click", () => S.ctl?.abort());
-  function persistRun() { try { const r = S.run; store.set("run", JSON.stringify({ ai: r.ai, styleId: r.styleId, secKey: r.sec.key, attempts: r.attempts, createdAt: r.createdAt, promptBytes: r.promptBytes, bestAttempt: r.bestAttempt })); } catch {} }
+  function persistRun() { try { const r = S.run; store.set("run", JSON.stringify({ styleId: r.styleId, secKey: r.sec.key, attempts: r.attempts, rejected: r.rejected, repairsDone: r.repairsDone, rules: r.rules, createdAt: r.createdAt, promptBytes: r.promptBytes, bestAttempt: r.bestAttempt })); } catch {} }
   function restoreRun() {
     let saved; try { saved = JSON.parse(store.get("run") || "null"); } catch { saved = null; }
     if (!saved || !ready()) return;
     const cs = S.clip.data, music = S.music.data, sec = sectionOf(music, saved.secKey); if (!sec || !STYLES[saved.styleId]) return;
-    const mc = musicCtx(music, sec), p = normalizePlan(saved.ai, cs, mc, saved.styleId);
-    S.run = { ...saved, sec, mc, clipSet: cs, music, plan: p, val: validatePlan(p, cs, mc, saved.styleId), rev: reviewPlan(p, cs, mc, saved.styleId) };
+    const mc = musicCtx(music, sec), ai = saved.attempts?.[saved.bestAttempt ?? -1]?.ai || saved.ai; if (!ai) return;
+    const x = evaluate(ai, cs, mc, saved.styleId), outdated = saved.rules !== RULES_VERSION;
+    S.run = { ...saved, attempts: saved.attempts || [], rejected: saved.rejected || [], repairsDone: outdated ? 0 : saved.repairsDone ?? MAX_REPAIRS, ...x, sec, mc, clipSet: cs, music, outdated };
+    S.run.status = outdated && !x.rev.ok ? "needs-repair" : planStatus(x.val, x.rev, S.run.repairsDone);
   }
 
   // ---------- export ----------
   const exportName = d => `edit-plan-${d.style.id}-${String(d.music.filename).replace(/\.[a-z0-9]+$/i, "").normalize("NFKD").replace(/[^\w-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 40)}-${d.meta.createdAt.slice(0, 10)}.json`;
   const note = (msg, cls) => { const n = $("export-note"); if (!n) return; n.hidden = !msg; n.textContent = msg || ""; n.className = "small " + (cls || "muted"); };
+  // export gate: final, or final with unresolved creative warnings after explicit acceptance
+  const canExport = () => S.run?.plan && (S.run.status === "final" || (S.run.status === "final-with-warnings" && S.accept));
+  const exportData = () => buildPlanExport({ ...S.run, accepted: S.run.status === "final-with-warnings" && S.accept });
   async function exportPlan() {
-    if (!S.run?.plan || !S.downloads) return; const d = buildPlanExport({ ...S.run, styleId: S.run.styleId }), fn = exportName(d);
+    if (!canExport() || !S.downloads) return; const d = exportData(), fn = exportName(d);
     try { const r = await S.downloads.save({ filename: fn, data: JSON.stringify(d, null, 2) }); note(r?.status === "delivered" ? `${fn} übergeben.` : `${fn} gespeichert.`, "ok"); }
     catch (e) { note(e?.code === "declined" ? "Download abgebrochen." : `Download nicht möglich (${e?.code || e?.message || e}). „Copy JSON“ geht trotzdem.`, e?.code === "declined" ? "muted" : "warn"); }
   }
   async function copyPlan() {
-    if (!S.run?.plan) return; const text = JSON.stringify(buildPlanExport({ ...S.run, styleId: S.run.styleId }), null, 2), fb = $("export-fallback");
+    if (!canExport()) return; const text = JSON.stringify(exportData(), null, 2), fb = $("export-fallback");
     try { await navigator.clipboard.writeText(text); fb.hidden = true; note(`JSON kopiert (${Math.round(text.length / 1024)} KB).`, "ok"); }
     catch { fb.hidden = false; fb.value = text; fb.focus(); fb.select(); note("Die Zwischenablage ist hier gesperrt. Das JSON steht unten markiert; mit Strg/Cmd + C kopieren.", "warn"); }
   }
@@ -907,8 +1036,8 @@ Your previous plan: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, 
   function renderBudget() {
     if (!ready()) { $("budget").innerHTML = ""; return; }
     const cs = S.clip.data, sec = sectionOf(S.music.data, S.secKey), safe = sum(cs.clips.map(c => Math.max(0, c.safe[1] - c.safe[0]))), strong = sum(cs.clips.map(c => c.strongest[1] - c.strongest[0]));
-    const recMax = sum(cs.clips.map(c => c.maxScreen || 0));
-    $("budget").innerHTML = `<p class="notice ${safe >= sec.duration ? "info" : ""}">Material: ${fx(safe, 1)} s sichere Quellzeit (davon ${fx(strong, 1)} s stärkste Bereiche) in ${cs.clips.length} Clips, empfohlene Screentime zusammen ${fx(recMax, 1)} s. Der Musikabschnitt dauert ${fx(sec.duration, 1)} s.${recMax < sec.duration ? ` Das Video darf deshalb kürzer werden (ab etwa 23 s). Länger wird es durch längere Hero Shots oder gezielte Reverse-Turnarounds, nicht durch Wiederholungen desselben Bereichs.` : ""}</p>`;
+    const cap = materialCapacity(cs);
+    $("budget").innerHTML = `<p class="notice ${cap.total >= 23 ? "info" : ""}">Material: ${fx(safe, 1)} s sichere Quellzeit (davon ${fx(strong, 1)} s stärkste Bereiche) in ${cs.clips.length} Clips. Ohne Wiederholungen, innerhalb der empfohlenen Screentime und mit einem Turnaround auf geeigneten Push-ins trägt es etwa ${fx(cap.total, 1)} s. Der Musikabschnitt dauert ${fx(sec.duration, 1)} s; das Video muss ihn nicht füllen, 23 s bis ${fx(sec.duration, 1)} s sind in Ordnung.${cap.total < 23 ? " Unter 23 s sauberes Material: einzelne Punkte können unvermeidbar sein." : ""}</p>`;
   }
   function render() {
     $("styles").innerHTML = Object.entries(STYLES).map(([k, s]) => `<button data-style="${k}" aria-pressed="${k === S.style}">${s.label}<span>${s.ui}</span></button>`).join("");
@@ -958,13 +1087,22 @@ Your previous plan: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, 
     : s.segs.length > 1 ? `<span class="rev">${s.segs.map(g => `${g.dir > 0 ? "▶" : "◀"} ${fx(g.v, 2)}×`).join(" ⟲ ")}</span><br><span class="muted">${s.segs.some(g => g.tauIn) ? `Turnaround ${fx(sum(s.segs.map(g => g.tauIn + g.tauOut)), 2)} s` : "harter Wechsel"}</span>`
     : s.segs[0].dir < 0 ? `<span class="rev">◀ ${fx(s.segs[0].v, 2)}×</span><br><span class="muted">reverse</span>` : `${fx(s.speed, 2)}×`;
   function results(run) {
-    const { plan: p, val, ai, mc, clipSet: cs, sec } = run, rev = run.rev || reviewPlan(p, cs, mc, run.styleId), st = STYLES[run.styleId], d = buildPlanExport({ ...run, rev }), sm = d.summary;
-    const stale = run.styleId !== S.style || sec.key !== (sectionOf(S.music.data, S.secKey)?.key);
+    const { plan: p, val, ai, mc, clipSet: cs, sec } = run, rev = run.rev?.capacity ? run.rev : classifyReview(run.rev || reviewPlan(p, cs, mc, run.styleId), cs), st = STYLES[run.styleId], d = buildPlanExport({ ...run, rev }), sm = d.summary;
+    const stale = run.styleId !== S.style || sec.key !== (sectionOf(S.music.data, S.secKey)?.key), status = run.status || planStatus(val, rev, run.repairsDone ?? MAX_REPAIRS), vn = (run.bestAttempt ?? run.attempts.length - 1) + 1;
+    const unresolvedWhy = Object.fromEntries((ai.summary?.unresolved || []).map(u => [u.id, u.reason]));
+    const STATUS = { final: ["ok", "Final", `Plan V${vn}: keine technischen Fehler, keine offenen kreativen Punkte.`],
+      "needs-repair": ["warn", "Needs repair", run.outdated ? "Dieser Plan wurde mit älteren Regeln erzeugt und ist nach den aktuellen Regeln nicht final." : `Plan V${vn} ist nicht final: ${kp(rev.avoidable.length)} vermeidbar. Export gesperrt.`],
+      "final-with-warnings": ["warn", "Final with unresolved creative warnings", `Plan V${vn} nach ${run.repairsDone} Reparaturrunde${run.repairsDone === 1 ? "" : "n"}: ${kp(rev.repair.length)} offen${rev.unavoidable.length ? `, ${rev.unavoidable.length} davon mit diesem Material unvermeidbar` : ""}. Export erst nach Bestätigung.`],
+      failed: ["bad", "Nicht bestanden", `Plan V${vn} hat ${val.errors.length} technische Fehler. Export gesperrt; bitte neu erzeugen.`] }[status];
+    const banner = `<div class="status-banner ${STATUS[0]}"><div><b>${STATUS[1]}</b><p class="small">${esc(STATUS[2])}</p>
+      ${status === "final-with-warnings" ? `<ul class="small">${rev.repair.map(x => `<li><b>${esc(x.msg)}</b><br>${esc(x.why)}${unresolvedWhy[x.id] ? ` Claude: ${esc(unresolvedWhy[x.id])}` : x.avoidable ? " Nach zwei Reparaturrunden nicht gelöst." : ""}</li>`).join("")}</ul>` : ""}</div>
+      ${(status === "needs-repair" || (status === "failed" && (run.repairsDone ?? MAX_REPAIRS) < MAX_REPAIRS)) && S.sample ? `<button class="primary" data-act="repair" ${S.busy ? "disabled" : ""}>Plan reparieren</button>` : ""}</div>`;
     const pill = s => `<span class="pill p-${s}">${{ ok: "bestanden", warn: "Hinweis", error: "Fehler", info: "Info", open: "offen" }[s]}</span>`;
     const A = ai.directorAnalysis || {}, Cr = ai.creative || {};
     return `
     <section class="panel" aria-labelledby="h-sum">
-      <div class="row between"><h2 id="h-sum">5 · Plan Summary · ${esc(st.label)}</h2><span class="small muted">erstellt ${fmtDate(run.createdAt)} · ${run.attempts.length} Claude-Aufruf${run.attempts.length === 1 ? "" : "e"}</span></div>
+      <div class="row between"><h2 id="h-sum">5 · Plan Summary · ${esc(st.label)}</h2><span class="small muted">Plan V${vn} von ${run.attempts.length} · erstellt ${fmtDate(run.createdAt)}</span></div>
+      ${banner}
       ${stale ? `<p class="notice info">Dieser Plan gehört zu Style ${esc(st.label)} und Abschnitt ${fx(sec.start)}–${fx(sec.end)} s. Für die aktuelle Auswahl „Generate Edit Plan“ starten.</p>` : ""}
       <div class="facts">
         <div class="fact"><span class="label">Videolänge</span><span class="v">${fx(p.videoDuration, 2)} s</span></div>
@@ -972,7 +1110,7 @@ Your previous plan: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, 
         <div class="fact"><span class="label">Clips genutzt</span><span class="v">${sm.uniqueClips} / ${cs.clips.length}</span></div>
         <div class="fact"><span class="label">Wiederholt</span><span class="v t">${sm.reusedClips.length ? esc(sm.reusedClips.join(", ")) : "keine"}</span></div>
         <div class="fact"><span class="label">Ausgelassen</span><span class="v t">${sm.omittedClips.length ? esc(sm.omittedClips.map(o => o.filename).join(", ")) : "keine"}</span></div>
-        <div class="fact"><span class="label">Prüfung</span><span class="v t ${!val.passed ? "bad" : rev.ok ? "ok" : "warn"}">${val.passed ? "bestanden" : `${val.errors.length} Fehler`}${rev.repair.length ? ` · ${rev.repair.length} kreativ offen` : ""}${val.warnings.length ? ` · ${val.warnings.length} Hinweise` : ""}</span></div>
+        <div class="fact"><span class="label">Prüfung</span><span class="v t ${STATUS[0]}">${{ final: "Final", "needs-repair": "Needs repair", "final-with-warnings": "Final mit Warnungen", failed: "Nicht bestanden" }[status]}${rev.repair.length ? ` · ${rev.repair.length} offen` : ""}</span></div>
       </div>
       <div class="kv">
         <span class="muted">Musik</span><span>${esc(run.music.filename)} · ${fx(mc.s0)} → ${fx(mc.s0 + p.videoDuration)} s am Stück · ${fx(run.music.bpm, 1)} BPM</span>
@@ -1013,18 +1151,20 @@ Your previous plan: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, 
     </section>
 
     <section class="panel" aria-labelledby="h-val">
-      <div class="row between"><h2 id="h-val">Validation</h2><span class="small ${val.passed ? "ok" : "bad"}">${!val.passed ? `${val.errors.length} Fehler nach ${run.attempts.length - 1} Korrekturrunde${run.attempts.length === 2 ? "" : "n"}` : rev.ok ? "Alle Regeln erfüllt" : "Technisch bestanden, kreativ offen"}</span></div>
+      <div class="row between"><h2 id="h-val">Validation</h2><span class="small ${STATUS[0]}">${STATUS[1]}</span></div>
       <div><span class="label">Kreative Prüfung · wirkt der Schnitt menschlich?</span>
-        <div class="checks" style="margin-top:8px">${rev.repair.length ? rev.repair.map(x => `<div class="check">${pill("open")}<div>${esc(x.msg)}</div></div>`).join("") : `<div class="check">${pill("ok")}<div>Keine offenen kreativen Punkte${run.attempts.some(a => a.repairs) ? `, ${sum(run.attempts.map(a => a.repairs || 0))} wurden in den Korrekturrunden behoben` : ""}.</div></div>`}
+        <div class="checks" style="margin-top:8px">${rev.repair.length ? rev.repair.map(x => `<div class="check">${pill("open")}<div>${esc(x.msg)}<br><span class="small muted">Ziel: ${esc(x.fix)} · ${esc(x.why)}</span></div></div>`).join("") : `<div class="check">${pill("ok")}<div>Keine offenen kreativen Punkte${run.attempts.some(a => a.repairs) ? `, ${sum(run.attempts.map(a => a.repairs || 0))} wurden in den Korrekturrunden behoben` : ""}.</div></div>`}
         ${rev.notes.map(x => `<div class="check">${pill("info")}<div>${esc(x.msg)}</div></div>`).join("")}</div></div>
       <span class="label">Technische Prüfung</span>
       <div class="checks">${val.checks.map(c => `<div class="check">${pill(c.status)}<div><b>${esc(c.label)}</b>${c.items.length ? `<ul>${c.items.map(x => `<li class="p-${x.level}">${esc(x.msg)}</li>`).join("")}</ul>` : ""}</div></div>`).join("")}</div>
       ${p.corrections.length ? `<details><summary>Rechenkorrekturen durch den Code (${p.corrections.length})</summary><ul class="small">${p.corrections.map(c => `<li>${c.shot ? `Shot ${c.shot}: ` : ""}${esc(c.msg)}</li>`).join("")}</ul></details>` : ""}
-      <details><summary>Verlauf: Erzeugung und Korrekturrunden</summary><ul class="small">${run.attempts.map((a, i) => `<li>${i ? `Korrektur ${i}` : a.kind === "regenerate" ? "Regenerate" : "Erster Plan"} · ${fmtDate(a.at)} · ${Math.round((a.ms || 0) / 1000)} s · ${a.errors} Fehler, ${a.repairs ?? 0} kreative Punkte, ${a.warnings} Hinweise${i === run.bestAttempt ? " · <b>verwendet</b>" : ""}${a.errorList?.length ? `<br><span class="muted">${a.errorList.map(esc).join("<br>")}</span>` : ""}</li>`).join("")}</ul></details>
+      <details ${run.attempts.length > 1 ? "open" : ""}><summary>Versionen: V1${run.attempts.length > 1 ? ` bis V${run.attempts.length}` : ""}${run.rejected?.length ? ` · ${run.rejected.length} verworfene Antwort${run.rejected.length === 1 ? "" : "en"}` : ""}</summary><ul class="small">${run.attempts.map((a, i) => `<li><b>V${i + 1}</b> ${{ generate: "erster Plan", regenerate: "Regenerate", repair: "Reparatur", restored: "gespeicherter Plan" }[a.kind] || a.kind} · ${fmtDate(a.at)}${a.ms ? ` · ${Math.round(a.ms / 1000)} s` : ""} · ${a.errors} Fehler, ${kp(a.repairs ?? 0)}, ${a.warnings} Hinweise${i === run.bestAttempt ? " · <b>verwendet</b>" : ""}${a.diff ? `<br>Änderung gegenüber V${i}: ${esc(a.diff)}` : ""}${a.errorList?.length ? `<br><span class="muted">${a.errorList.map(esc).join("<br>")}</span>` : ""}</li>`).join("")}
+        ${(run.rejected || []).map(r => `<li class="warn">Verworfen (für V${r.forVersion}): ${esc(r.reason)} · ${fmtDate(r.at)}</li>`).join("")}</ul></details>
     </section>
 
     <section class="panel" aria-labelledby="h-exp">
-      <div class="row between"><h2 id="h-exp">Export</h2><div class="row"><button class="primary" data-act="export" ${S.downloads ? "" : "disabled title=\"Download ist in dieser Ansicht nicht verfügbar\""}>Export Edit Plan JSON</button><button data-act="copy">Copy JSON</button></div></div>
+      <div class="row between"><h2 id="h-exp">Export</h2><div class="row"><button class="primary" data-act="export" ${S.downloads && canExport() ? "" : `disabled title="${!S.downloads ? "Download ist in dieser Ansicht nicht verfügbar" : "Erst wenn der Plan final ist"}"`}>Export Edit Plan JSON</button><button data-act="copy" ${canExport() ? "" : "disabled"}>Copy JSON</button></div></div>
+      ${status === "final-with-warnings" ? `<label class="small accept"><input type="checkbox" id="accept-warnings" ${S.accept ? "checked" : ""}> Ich akzeptiere die ${rev.repair.length} offenen kreativen Punkte und exportiere den Plan trotzdem.</label>` : status !== "final" ? `<p class="small warn">Export gesperrt: ${status === "failed" ? "der Plan hat technische Fehler." : "der Plan ist noch nicht final (Needs repair)."}</p>` : ""}
       <p class="small muted">Enthält meta, music, style, timeline, shots, validation und summary. Keine UI-Daten, kein Shotstack-Edit, kein Render. Speed-Ramps sind zusätzlich als Teilstücke mit konstanter Geschwindigkeit angegeben (<span class="mono">speedRamp.segments</span>), die ein Builder direkt als Clips umsetzen kann.</p>
       <p class="small muted" id="export-note" hidden></p>
       <textarea id="export-fallback" rows="8" aria-label="Plan-JSON zum manuellen Kopieren" readonly hidden></textarea>
