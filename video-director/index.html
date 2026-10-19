@@ -184,7 +184,7 @@ textarea { width: 100%; font-family: var(--f-mono); font-size: 12px; border: 1px
 
 <script>
 // ===== CORE-BEGIN: pure functions (no AI, no DOM): read inputs, music context, normalise and validate a plan, build the export =====
-const FPS = 25, FRAME = 1 / FPS, RULES_VERSION = "video-director-rules/4 · 2026-10-19", ARTIFACT_URL = "https://claude.ai/artifact/TKVkmNaT5VhMdBe3PUdnQs";
+const FPS = 25, FRAME = 1 / FPS, RULES_VERSION = "video-director-rules/5 · 2026-10-19", ARTIFACT_URL = "https://claude.ai/artifact/TKVkmNaT5VhMdBe3PUdnQs";
 const r3 = x => Math.round(x * 1000) / 1000;
 const num = x => (typeof x === "number" && isFinite(x)) ? x : (x != null && x !== "" && isFinite(+x) ? +x : null);
 const sum = a => a.reduce((s, x) => s + x, 0);
@@ -471,10 +471,10 @@ function validatePlan(p, clipSet, mc, styleId) {
   if (p.videoDuration > mc.L + eps) it(cMu, "error", `Video (${p.videoDuration} s) ist länger als der Musikabschnitt (${r3(mc.L)} s).`);
   else if (p.videoDuration < mc.L - eps) {
     const endBar = mc.bars.some(b => Math.abs(b.t - p.videoDuration) <= 2 * FRAME);
-    it(cMu, endBar && p.videoDuration >= 23 - eps ? "info" : "warn", `Video endet bei ${p.videoDuration} s, vor dem Ende des Abschnitts (${r3(mc.L)} s)${endBar ? " auf einem Taktanfang" : ", nicht auf einem Taktanfang"}${p.videoDuration < 23 - eps ? ", unter 23 s" : ""}. Die Musik läuft trotzdem am Stück und wird am Ende ausgeblendet.`);
+    it(cMu, endBar ? "info" : "warn", `Video endet bei ${p.videoDuration} s, vor dem Ende des Abschnitts (${r3(mc.L)} s)${endBar ? " auf einem Taktanfang" : ", nicht auf einem Taktanfang"}. Die Musik läuft am Stück bis dorthin und wird am Ende ausgeblendet.`);
   }
   it(cMu, "info", `Musik läuft ohne Schnitt, Sprung oder Loop von Track ${r3(mc.s0)} s bis ${r3(mc.s0 + Math.min(p.videoDuration, mc.L))} s.`);
-  if (p.videoDuration < 23 - eps || p.videoDuration > 32 + eps) it(cMu, "warn", `Videolänge ${p.videoDuration} s liegt außerhalb von 23–32 s.`);
+  // no fixed length window: the length is a result of the planning (rules v5)
   // repetition
   const byClip = {}; S.forEach(s => { if (s.clip) (byClip[s.clip.ref] ||= []).push(s); });
   for (const [ref, list] of Object.entries(byClip)) {
@@ -552,7 +552,7 @@ function validatePlan(p, clipSet, mc, styleId) {
 }
 
 // ---- creative review (code): does the plan read like a human edit? "repair" items are sent back to Claude, "note" items are shown ----
-const STRONG_ROOMS = /exterior|facade|fassade|building|living|wohn|dining|ess|kitchen|küche|terrace|terrasse|balcony|balkon|garden|garten|pool|view|aussicht/i;
+const STRONG_ROOMS = /exterior|facade|fassade|building|architect|living|wohn|dining|essbereich|esszimmer|kitchen|küche|terrace|terrasse|balcony|balkon|garden|garten|pool|view|aussicht/i;
 const ARTIFACT = /artifact|artefakt|morph|warp|distort|verzerr|flicker|flacker|glitch/i;
 const REVERSE_RISK = /pool|wasser|water|brunnen|fountain|meer|\bsea\b|\blake\b|fluss|river|wave|welle|regen|rain|person|people|mensch|frau|mann|kind|tier|\bhund\b|dog|katze|cat|vorhang|curtain|rauch|smoke|feuer|fire|flamme|blätter|leaves|wind/i;
 const isStrong = c => c.priorityClass === "A" || c.rank <= 2 || (c.priorityClass === "B" && (c.contentWeight ?? 0) >= 7.5 && STRONG_ROOMS.test(c.roomType));
@@ -572,8 +572,7 @@ function reviewPlan(p, clipSet, mc, styleId, ai = {}) {
   if (top && n >= 6 && top.n >= 3 && top.n / n >= 0.35) add("repeated-lengths", "repair", `${top.n} von ${n} Shots sind ${fx3(top.d)} s lang. Die Shot-Längen wiederholen sich sichtbar.`);
   const onBar = cuts.filter(t => mc.bars.some(b => Math.abs(b.t - t) <= 2 * FRAME)).length, barsIn = mc.bars.filter(b => b.t > 0.1 && b.t < p.videoDuration - 0.1).length;
   if (cuts.length >= 6 && onBar / cuts.length >= 0.8 && barsIn && onBar / barsIn >= 0.7) add("cut-every-bar", "repair", `${onBar} von ${cuts.length} Schnitten liegen auf Taktanfängen, und ${Math.round(onBar / barsIn * 100)} % aller Taktanfänge haben einen Schnitt. Nicht jeder Takt braucht einen Cut.`);
-  // 5 about 23 s is the target, not a duty: below 22.5 s it is a point, unavoidable when the strong material does not carry more
-  if (p.videoDuration < 22.5) add("too-short", "repair", `Das Video ist ${fx3(p.videoDuration)} s lang; Ziel sind etwa 23 s. Länger nur mit starkem Material (längerer Hero Shot, sauberer Bereich), nie mit Füllstoff, Wiederholungen oder Reverse nur für Länge.`);
+  // no fixed length: G checks whether the length fits the amount and quality of the material (further below)
   // 3 a strong selling point early
   const early = S.find(s => s.clip && isStrong(s.clip) && s.ts < 6 && Math.min(s.te, 6.5) - s.ts >= 0.8);
   if (n && !early) add("early-selling-point", "repair", `In den ersten 6 s ist kein starker Selling Point zu sehen (stark: ${clipSet.clips.filter(isStrong).map(c => `${c.filename} ${c.roomType}`).join(", ")}).`);
@@ -594,7 +593,6 @@ function reviewPlan(p, clipSet, mc, styleId, ai = {}) {
   // filler goes: the director's own filler list, and secondary clips without a stated reason
   for (const c of clipSet.clips) { if (!tot(c)) continue;
     if (filler.has(c.ref)) add("filler", "repair", `${c.filename} (${c.roomType}) ist laut eigener Director-Analyse Füllstoff, wird aber verwendet. Weglassen.`);
-    else if ("CDE".includes(c.priorityClass) && !keptSecondary[c.ref]) add("filler", "repair", `${c.filename} (Klasse ${c.priorityClass}, ${c.roomType}) wird ohne Begründung verwendet. Nebenclips bleiben standardmäßig weg, außer sie machen das Video klar besser (summary.keptSecondary).`);
     if (artifactShare(c) >= 0.7 && c.priorityClass !== "A") add("artifact-clip", "repair", `${c.filename} hat ein sichtbares Artefakt über ${Math.round(artifactShare(c) * 100)} % seines nutzbaren Bereichs und ist nicht essenziell. Weglassen, auch nicht als Bridge.`); }
   const sec = sum(clipSet.clips.filter(c => "CDE".includes(c.priorityClass)).map(tot));
   if (p.videoDuration && sec / p.videoDuration > 0.25) add("secondary-share", "repair", `Nebenclips (C–E) füllen ${Math.round(sec / p.videoDuration * 100)} % des Videos. Lieber weglassen oder kürzer.`);
@@ -606,6 +604,29 @@ function reviewPlan(p, clipSet, mc, styleId, ai = {}) {
   for (const s of S) { const c = s.clip; if (!c || (artifactShare(c) >= 0.7 && c.priorityClass !== "A")) continue;
     for (const pr of c.problems) if (ARTIFACT.test(pr.type + " " + pr.note) && overlap(s.a, s.b, pr.from, pr.to) > 0.02) add("artifact", "repair", `Shot ${s.shotNumber} (${c.filename}): sichtbares Artefakt „${pr.type}“ ${pr.from}–${pr.to} s im genutzten Bereich. Vermeiden, wenn der Edit ohne diesen Clip auskommt.`, s.shotNumber); }
   // reverse: purposeful, rare, smooth, only on suitable footage
+  // 17 material usage (A-G)
+  const cap = materialCapacity(clipSet), role = Object.fromEntries(cap.per.map(x => [x.ref, x.role])), capOf = Object.fromEntries(cap.per.map(x => [x.ref, x.seconds]));
+  const microCheck = byIdList(ai.summary?.microInsertCheck), dd = ai.summary?.durationDecision;
+  const primUsed = clipSet.clips.filter(c => role[c.ref] === "primary" && tot(c) > 0), minPrim = primUsed.length ? Math.min(...primUsed.map(tot)) : null;
+  for (const c of clipSet.clips) { const t = tot(c), r = role[c.ref];
+    // A strong clips used adequately
+    if (r === "primary" && !t) add("primary-unused", "repair", `${c.filename} (${c.roomType}, Klasse ${c.priorityClass}) ist Hauptmaterial, kommt aber nicht vor.`);
+    else if (r === "primary" && t < Math.min(c.minScreen ?? 1.5, 0.6 * capOf[c.ref]) - 0.05) add("primary-underused", "repair", `${c.filename} (${c.roomType}) ist Hauptmaterial, bekommt aber nur ${fx3(t)} s (empfohlen ab ${c.minScreen ?? "?"} s).`);
+    // B secondary clips not too long; micro inserts stay short
+    if (r === "micro" && t) { const long = (byClip[c.ref] || []).filter(s => s.dur > MICRO_MAX + 0.1);
+      if (long.length) add("micro-long", "repair", `${c.filename} (${c.roomType}) läuft ${long.map(s => `${fx3(s.dur)} s in Shot ${s.shotNumber}`).join(", ")}. Als Micro Insert höchstens etwa ${MICRO_MAX} s.`, long[0].shotNumber);
+      if (minPrim != null && t > 0.5 * minPrim + 0.05) add("micro-vs-primary", "repair", `${c.filename} (${c.roomType}) bekommt ${fx3(t)} s, mehr als die Hälfte des kürzesten Hauptclips (${fx3(minPrim)} s).`); }
+    // F no repeat of secondary material just for length
+    if ((r === "micro" || r === "avoid") && (byClip[c.ref] || []).length > 1) add("repeat-secondary", "repair", `${c.filename} (${c.roomType}) kommt ${(byClip[c.ref] || []).length}× vor. Nebenmaterial nicht wiederholen.`); }
+  // C secondary clips checked as micro inserts before they are dropped
+  const micro = clipSet.clips.filter(c => role[c.ref] === "micro"), unchecked = micro.filter(c => !tot(c) && !microCheck[c.ref]);
+  if (micro.length && unchecked.length) add("micro-unchecked", "repair", `Nicht als Micro Insert geprüft: ${unchecked.map(c => `${c.filename} (${c.roomType})`).join(", ")}. Für jeden Kandidaten in summary.microInsertCheck sagen, ob er als 0,4–1,1-s-Insert den Film besser macht, und warum (nicht).`);
+  // G length fits amount and quality of the material
+  const natural = Math.min(cap.total, mc.L);
+  if (!dd || num(dd.finalDuration) == null || !String(dd.reason || "").trim()) add("duration-decision", "repair", "summary.durationDecision fehlt: die Länge muss aus dem Material begründet werden (Hauptmaterial, Support, Micro Inserts, warum nicht länger, warum nicht kürzer).");
+  if (p.videoDuration < 0.85 * natural - 0.1) add("length-fit", "repair", `Das Video (${fx3(p.videoDuration)} s) lässt gutes Material liegen: das Material trägt etwa ${fx3(natural)} s (Hauptmaterial ${fx3(cap.primary)} s, Support ${fx3(cap.support)} s, Micro Inserts ${fx3(cap.micro)} s).`);
+  else if (p.videoDuration > 1.15 * cap.total + 0.1) add("length-fit", "repair", `Das Video (${fx3(p.videoDuration)} s) ist länger, als das Material sauber trägt (etwa ${fx3(cap.total)} s). Das geht nur mit Wiederholung, Dehnung oder Füllstoff.`);
+  if (cap.total > mc.L + 1) add("length-section", "note", `Das Material trägt etwa ${fx3(cap.total)} s, der gewählte Musikabschnitt endet nach ${fx3(mc.L)} s. Für einen längeren Film einen längeren Abschnitt wählen.`);
   const rev = S.filter(s => s.segs.some(g => g.dir < 0)), turns = S.filter(s => s.segs.length > 1);
   if (rev.length > 2) add("reverse-count", "repair", `${rev.length} Shots mit Reverse. Reverse ist ein Spezialwerkzeug, kein Standard (höchstens 2, davon eine prominente Forward→Reverse-Sequenz).`);
   if (turns.length > 2 || (turns.length === 2 && !secondReverseWhy)) add("second-turnaround", "repair", `${turns.length} Forward→Reverse-Sequenzen (Shots ${turns.map(s => s.shotNumber).join(", ")}). Normalerweise reicht eine prominente; eine zweite nur, wenn sie visuell klar anders wirkt und die Musik sie stark trägt (summary.secondReverseJustification), nie für Länge.`, turns[1]?.shotNumber);
@@ -617,7 +638,9 @@ function reviewPlan(p, clipSet, mc, styleId, ai = {}) {
     if (c.problems.some(pr => ARTIFACT.test(pr.type + " " + pr.note) || /light|licht/i.test(pr.type))) add("reverse-artifact", "repair", `Shot ${s.shotNumber} (${c.filename}): Reverse auf einem Clip mit gemeldetem Artefakt oder Lichtproblem.`, s.shotNumber);
     if (s.segs.length > 2) add("boomerang", "repair", `Shot ${s.shotNumber}: ${s.segs.length - 1} Richtungswechsel. Normalerweise höchstens einer, sonst wirkt es wie ein Boomerang.`, s.shotNumber);
     if (s.segs.length > 1 && s.turnOff && s.segs.some(g => g.v >= 0.5)) add("hard-turn", "repair", `Shot ${s.shotNumber}: Richtungswechsel ohne Turnaround bei ${s.segs.map(g => g.v).join(" / ")}×. Das ruckt.`, s.shotNumber);
-    if (!s.speedReason) add("reverse-reason", "repair", `Shot ${s.shotNumber}: Reverse ohne kreativen Grund (speedReason fehlt).`, s.shotNumber); }
+    if (!s.speedReason) add("reverse-reason", "repair", `Shot ${s.shotNumber}: Reverse ohne kreativen Grund (speedReason fehlt).`, s.shotNumber);
+    if (s.segs.length > 1) { const fwd = sum(s.segs.filter(g => g.dir > 0).map(g => Math.abs(g.to - g.from))), back = sum(s.segs.filter(g => g.dir < 0).map(g => Math.abs(g.to - g.from)));
+      if (fwd && back > 0.7 * fwd) add("reverse-stretch", "repair", `Shot ${s.shotNumber} (${c.filename}): der Rückweg (${fx3(back)} s Source) ist fast so lang wie die Fahrt hinein (${fx3(fwd)} s). Das wirkt wie Verlängerung oder Boomerang; den Pull-back kurz halten.`, s.shotNumber); } }
   if (n >= 4) { const lens = S.map(s => s.dur); add("lengths", "note", `Shot-Längen ${fx3(Math.min(...lens))}–${fx3(Math.max(...lens))} s, ${groups.length} verschiedene; ${Math.round(barShare * 100)} % genau auf Taktlänge; ${onBar} von ${cuts.length} Schnitten auf Taktanfängen.`); }
   add("first-strong", "note", early ? `Erster starker Selling Point: ${early.clip.filename} (${early.clip.roomType}) ab ${fx3(early.ts)} s.` : "Kein starker Selling Point in den ersten 6 s.");
   const repair = items.filter(x => x.level === "repair");
@@ -641,36 +664,54 @@ const FIX = {
   "speed-vs-analysis": "Set speed 1.0 (the analysis says normal).",
   "speed-reason": "Set speed 1.0, or give a real creative reason in speedReason.",
   "artifact": "Leave the clip out or use a range without the artefact.",
-  "too-short": "Only if strong material allows: a longer hero shot or a cleaner range. Never filler, repeats or reverse just for length; a shorter video is fine.",
-  "filler": "Leave this clip out. Keep a secondary clip only if it clearly improves the video and say why in summary.keptSecondary.",
+  "primary-unused": "Use this main clip: it is one of the selling arguments.",
+  "primary-underused": "Give this main clip more of its good range (about its recommended screen time).",
+  "micro-long": "Keep a micro insert at about 0.4-1.1 s, from its best range only.",
+  "micro-vs-primary": "Shorten the secondary clip; main rooms get clearly more time.",
+  "repeat-secondary": "Use secondary material at most once.",
+  "micro-unchecked": "For each micro insert candidate say in summary.microInsertCheck whether a 0.4-1.1 s insert from its best range makes the film better (e.g. in a burst before the drop) and why or why not.",
+  "duration-decision": "Fill summary.durationDecision: finalDuration, reason, primaryMaterialSeconds, supportMaterialSeconds, microInsertSeconds, whyNotLonger, whyNotShorter.",
+  "length-fit": "Let the length follow the material: use the good material that is left (main clips, support, fitting micro inserts) or cut what only fills; no repeats or stretching.",
+  "reverse-stretch": "Keep the pull-back short (a gentle stop and a short way back), or play the shot forward only.",
+  "filler": "Leave this clip out: your own analysis calls it filler.",
   "artifact-clip": "Leave the clip out completely; not even as a bridge.",
   "second-turnaround": "Keep one forward->reverse hero; turn the other into a plain forward shot or shorten it, or justify it in summary.secondReverseJustification if it is visually clearly different and the music strongly carries it.",
   "reverse-count": "Keep reverse for the one or two shots where it helps most.",
   "reverse-risk": "No reverse on this clip.", "reverse-artifact": "No reverse on this clip.",
   "boomerang": "At most one direction change per shot.", "hard-turn": "Set turnaround.enabled = true.", "reverse-reason": "Give speedReason or play forward."
 };
-// strong material without filler: A/B clips without a full-range artefact, each capped at recommendedMax +20 %, no repeats;
-// one push-in (one prominent forward->reverse per video) may gain up to 60 % of its range by a turnaround
+// material roles (code suggestion, the director decides): primary/hero, support, micro insert candidate, avoid
+function materialRole(c) {
+  const span = Math.max(0, c.safe[1] - c.safe[0]);
+  if (span < 0.4 || c.priorityClass === "E" || (artifactShare(c) >= 0.7 && c.priorityClass !== "A")) return "avoid";
+  if (c.priorityClass === "A" || (c.priorityClass === "B" && STRONG_ROOMS.test(c.roomType))) return "primary";
+  if (c.priorityClass === "B") return "support";
+  return "micro";
+}
+const MICRO_MAX = 1.1;
+// natural length estimate = what the material carries without repeats or stretching: primary and support clips up to
+// recommendedMax +20 %, one forward->reverse turnaround on the best push-in, one micro insert (0.4-1.1 s) per candidate
 function materialCapacity(clipSet, turnSlots = 1) {
   const per = clipSet.clips.map(c => {
-    const span = Math.max(0, c.safe[1] - c.safe[0]), art = sum(c.problems.filter(p => ARTIFACT.test(p.type + " " + p.note)).map(p => overlap(p.from, p.to, c.safe[0], c.safe[1])));
-    const txt = [c.roomType, c.description, c.camera?.note].join(" "), moving = !/static|statisch|locked/i.test(String(c.camera?.type ?? c.camera ?? ""));
-    const strong = "AB".includes(c.priorityClass), clean = strong && span > 0 && art < 0.7 * span, canTurn = clean && moving && !REVERSE_RISK.test(txt) && !art;
-    const limit = c.maxScreen == null ? span * 1.6 : c.maxScreen * 1.2, base = clean ? Math.min(limit, span) : 0;
-    return { ref: c.ref, filename: c.filename, priorityClass: c.priorityClass, canTurn, clean, base: r3(base), gain: canTurn ? r3(Math.max(0, Math.min(limit - base, 0.6 * span))) : 0 };
+    const role = materialRole(c), span = Math.max(0, c.safe[1] - c.safe[0]), txt = [c.roomType, c.description, c.camera?.note].join(" ");
+    const moving = !/static|statisch|locked/i.test(String(c.camera?.type ?? c.camera ?? "")), clean = role !== "avoid";
+    const canTurn = clean && moving && !REVERSE_RISK.test(txt) && !artifactShare(c), limit = c.maxScreen == null ? span * 1.6 : c.maxScreen * 1.2;
+    const base = role === "avoid" ? 0 : role === "micro" ? Math.min(MICRO_MAX, Math.max(0, c.strongest[1] - c.strongest[0]) || span, c.maxScreen ?? MICRO_MAX) : Math.min(limit, span);
+    return { ref: c.ref, filename: c.filename, priorityClass: c.priorityClass, role, canTurn: canTurn && role !== "micro", clean, base: r3(base), gain: canTurn && role === "primary" ? r3(Math.max(0, Math.min(limit - base, 0.6 * span))) : 0 };
   });
   const top = new Set([...per].filter(x => x.gain > 0).sort((a, b) => b.gain - a.gain).slice(0, turnSlots).map(x => x.ref));
   per.forEach(x => { x.turnCounted = top.has(x.ref); x.seconds = r3(x.base + (x.turnCounted ? x.gain : 0)); });
-  return { total: r3(sum(per.map(x => x.seconds))), primary: r3(sum(per.filter(x => "AB".includes(x.priorityClass)).map(x => x.seconds))), per };
+  const by = role => r3(sum(per.filter(x => x.role === role).map(x => x.seconds)));
+  return { total: r3(sum(per.map(x => x.seconds))), primary: by("primary"), support: by("support"), micro: by("micro"), per };
 }
-// only the length is bound to the material: repeats, overruns and artefacts can always be cut, the price is a shorter video
-const MATERIAL_BOUND = new Set(["too-short"]);
+// there is no length target any more; nothing is bound to the material by default (the mechanism stays for later rules)
+const MATERIAL_BOUND = new Set();
 function classifyReview(rev, clipSet) {
-  const cap = materialCapacity(clipSet), short = cap.total < 23.5; // margin: the estimate ignores cut points and short burst shots
+  const cap = materialCapacity(clipSet), short = false;
   for (const x of rev.repair) {
     x.fix = FIX[x.id] || "";
     x.avoidable = !(short && MATERIAL_BOUND.has(x.id));
-    x.why = x.avoidable ? `Vermeidbar: mit diesem Material lösbar (starkes Material ohne Füllstoff etwa ${fx3(cap.total)} s).` : `Unvermeidbar: starkes Material ohne Füllstoff (A/B-Clips ohne Artefakt, recommendedMax +20 %, keine Wiederholung, ein Turnaround) trägt nur etwa ${fx3(cap.total)} s. Länger ginge nur mit Füllstoff, Wiederholung oder Reverse für Länge.`;
+    x.why = x.avoidable ? `Vermeidbar: mit diesem Material lösbar (natürliche Länge des Materials etwa ${fx3(cap.total)} s).` : "Unvermeidbar mit diesem Material.";
   }
   rev.capacity = cap; rev.avoidable = rev.repair.filter(x => x.avoidable); rev.unavoidable = rev.repair.filter(x => !x.avoidable);
   return rev;
@@ -756,6 +797,9 @@ function buildPlanExport(st) {
       screenTime: clipSet.clips.map(c => ({ filename: c.filename, priorityClass: c.priorityClass, roomType: c.roomType, seconds: val.screenTime[c.ref], uses: p.shots.filter(s => s.clip === c).length, recommendedMin: c.minScreen, recommendedMax: c.maxScreen })),
       speedRamps: p.shots.filter(s => s.ramp).length, softTransitions: p.shots.filter(s => SOFT.has(s.tout)).length,
       reverseShots: p.shots.filter(s => s.segs.some(g => g.dir < 0)).map(s => ({ shotNumber: s.shotNumber, direction: s.direction, reason: s.speedReason || null })),
+      durationDecision: ai.summary?.durationDecision || null,
+      materialEstimate: { primarySeconds: rev.capacity.primary, supportSeconds: rev.capacity.support, microInsertSeconds: rev.capacity.micro, totalSeconds: rev.capacity.total, roles: rev.capacity.per.map(x => ({ filename: x.filename, role: x.role, seconds: x.seconds })), source: "derived-code" },
+      microInsertCheck: ai.summary?.microInsertCheck || [],
       shotLengths: p.shots.map(s => s.dur), firstStrongSellingPointAt: p.shots.find(s => s.clip && isStrong(s.clip))?.ts ?? null, selfReview: ai.summary?.selfReview || "",
       overallDramaturgy: ai.summary?.overallDramaturgy || "", editingConcept: ai.summary?.editingConcept || "", creative: ai.creative || {}, directorAnalysis: ai.directorAnalysis || {} }
   };
@@ -808,7 +852,8 @@ function buildPlanExport(st) {
       duration: c.duration, usable: c.usable, SAFE: c.safe, strongest: c.strongest, weakStart: c.weakStart, weakEnd: c.weakEnd,
       problems: c.problems.map(p => ({ type: p.type, from: p.from, to: p.to, severity: p.severity, note: p.note })), hardCuts: c.hardCuts, movementGoodFrom: c.movementGoodFrom, perspectiveWorseFrom: c.perspectiveWorseFrom,
       screenTime: [c.minScreen, c.maxScreen], playback: c.playback, playbackReason: c.playbackReason, camera: c.camera, roles: c.roles, preferredRole: c.preferredRole,
-      segments: c.segments, bestUse: c.bestUse, screenTimeReason: c.screenTimeReason, uniqueness: c.uniqueness, similarTo: c.similarTo, relativeReason: c.relativeReason });
+      segments: c.segments, bestUse: c.bestUse, screenTimeReason: c.screenTimeReason, uniqueness: c.uniqueness, similarTo: c.similarTo, relativeReason: c.relativeReason,
+      materialRole: materialRole(c), ...(materialRole(c) === "micro" ? { microInsertRange: [c.strongest[0], r3(Math.min(c.strongest[1], c.strongest[0] + MICRO_MAX))] } : {}) });
   }
   function basePrompt(cs, music, sec, mc, styleId) {
     const st = STYLES[styleId];
@@ -816,7 +861,7 @@ function buildPlanExport(st) {
 
 STYLE: ${st.label}: ${st.prompt} The style sets the creative direction; it is not a template. Typical shot lengths: ${st.avg} (guidance only).
 
-MUSIC (one continuous piece, never cut): track "${music.filename}", ${fx(music.bpm, 1)} BPM, bar ${fx(music.barLen, 3)} s. The video uses the track from ${r3(sec.start)} s to ${r3(sec.end)} s in one piece: no internal cuts, jumps or loops; the edit adapts to the music, never the other way round. Video time 0 = track time ${r3(sec.start)} s. videoDuration: at most ${r3(mc.L)} s (the section), at least 23 s; it may end earlier on a musically clean point when the material is better used that way (see the rules), and the music then fades out there.
+MUSIC (one continuous piece, never cut): track "${music.filename}", ${fx(music.bpm, 1)} BPM, bar ${fx(music.barLen, 3)} s. The video uses the track from ${r3(sec.start)} s to ${r3(sec.end)} s in one piece: no internal cuts, jumps or loops; the edit adapts to the music, never the other way round. Video time 0 = track time ${r3(sec.start)} s. The section allows at most ${r3(mc.L)} s; the edit decides how much of it is used (no length target, see below), and the music fades out where the video ends.
 All music times below are VIDEO times (track time − ${r3(sec.start)}). They are orientation points for the edit, not a grid to fill.
 Bars [video time s, energy 0-1, bar index] (Shotstack bars.energy): ${C(mc.bars.map(b => [b.t, b.e, b.i]))}
 Energy of the 2 bars before the section: ${C(mc.before)}, after it: ${C(mc.after)}
@@ -833,59 +878,70 @@ Key moments, interpreted: ${C(mc.kmInt)}
 PROPERTY: ${cs.source.setName || "set"}. ${cs.overview}
 Selling points: ${C(cs.sellingPoints)}
 Similar clips: ${C(cs.similarGroups)}
-CLIPS, ranked; weights are final after the comparison of all clips. SAFE = usable range minus the weak start/end (hard limit). screenTime = recommended total [min, max] s for the whole video if the clip is used at all (secondary clips may simply be left out):
+CLIPS, ranked; weights are final after the comparison of all clips. SAFE = usable range minus the weak start/end (hard limit). screenTime = recommended total [min, max] s if the clip is used. materialRole = the code's suggestion (primary, support, micro = micro insert candidate, avoid); you decide, with reasons:
 ${cs.clips.map(clipLine).join("\n")}
-Material: strong clips only (class A/B without a full-range artefact), no repeats, each at most recommendedMax +20 %, one forward->reverse turnaround: about ${materialCapacity(cs).total} s. About 23 s is the target, not a duty: if the strong material carries 22.8 s or less, the video is that long. Never use filler, repeats or reverse to reach a length.
+Material estimate (code, a guide, not a target): primary/hero about ${materialCapacity(cs).primary} s, support about ${materialCapacity(cs).support} s, micro inserts about ${materialCapacity(cs).micro} s; together the material carries about ${materialCapacity(cs).total} s without repeats, stretching or filler. The music section allows at most ${r3(mc.L)} s.
 
-THINK FIRST and write it into "directorAnalysis": 1. What sells this property? 2. Which clips are strongest? 3. Which only support, and which add nothing to this video? 4. Which source ranges are truly good, and which could carry a reverse move? 5. How does this music section develop? 6. Where are the strong beats, downbeats, drops and energy changes that matter? 7. Which dramaturgy follows from that? Only then build the timeline.
+FIRST BUILD AN EDITING CONCEPT (write it into "directorAnalysis") before any shot: 1. What sells this property? 2. Which 2-4 motifs are the main arguments? 3. Which clips are hero? 4. Which are support? 5. Which make good micro inserts? 6. Which should go out? 7. How does the music develop? 8. Where are the musical peaks that matter? 9. How do opening, build, peak and ending work? 10. Which video length follows NATURALLY from this material? Only then build the timeline.
 
-HOW A GOOD HUMAN EDITOR WORKS (this matters more than any grid)
-Before every shot ask: without a timeline and without rules in front of me, would a good real-estate editor put exactly this shot exactly here? Priorities, in this order: 1 viewer interest, 2 show the strong property, 3 visual flow, 4 musical flow, 5 style, 6 the technical grid. Never the other way round.
-- Music markers are orientation points, not a grid. A shot may start inside a bar on an ordinary beat, span several bars, use only part of a bar, or deliberately skip a marker. Not every bar start needs a cut. Cut first for picture and story, then let it sit cleanly on the music (a beat, a downbeat, a drop, an energy change).
-- Shot lengths vary naturally with content and music, e.g. 0.6, 0.9, 1.3, 1.8, 2.2, 2.7, 3.1, 3.6 s. No forced random values, but no visible pattern: avoid many shots of exactly one bar (${fx(mc.barLen, 2)} s) or two bars, and avoid repeating the same length.
-- Show a very strong selling point early: within the first 3-6 s at least one of the strongest clips (exterior, pool, living room, strong terrace, kitchen or view, as the analysis ranks them). Do not save every strong clip for a later drop; a hero clip may return at a peak with a different source range.
-- Not every clip has to be used: 6 of 8 clips is a perfectly good plan. Secondary clips (class C/D/E: bathroom, WC, dressing room, office, hallway, side rooms) are LEFT OUT BY DEFAULT. Keep one only if it clearly makes this video better, and then name it with the reason in "summary.keptSecondary". Every clip you call filler in your own analysis goes into "directorAnalysis.fillerClips" and is not used. Ask "which shots make this video better?", not "how do I fit all clips in".
-- A clip whose visible AI artefact covers its whole usable range is left out unless it is essential (class A); never use it as a bridge or filler.
-- Video length: about 23 s to ${r3(mc.L)} s is the target, quality beats the target. If there is not enough strong material, make the video shorter instead of adding filler or repeats: a strong 22.8 s video beats a 25 s one with filler. End on a musically clean point (a bar start or a strong beat); the music then fades out there.
-- The final weighting must be visible: primary clips (class A/B, high contentWeight and screenTimePriority) get clearly more screen time and the key musical moments; secondary clips stay short or are left out. The concrete clip analysis decides, not the room name.
-- No fixed room order and no fixed rhythm template. The best edit matters more than being different.
+THE CENTRAL QUESTION: how would a good human real-estate editor cut exactly this material? Not "how do I reach 23, 25 or 30 s", not "how do I fit every clip in", not "how do I deal clips onto bars".
+Before every shot ask: without a timeline and rules in front of me, would a good editor put exactly this shot exactly here? Priorities: 1 viewer interest, 2 show the strong property, 3 visual flow, 4 musical flow, 5 style, 6 the technical grid.
 
-SOURCE, REPEATS, SPEED
-- Source ranges: stay inside SAFE (hard). Prefer the strongest range. Never use weak ranges, problem ranges or ranges across a hard cut; avoid ranges with a visible artefact if the edit works without them. Cut shorter rather than longer.
-- recommendedMax is not absolutely hard, but more than about 20 % above it needs a really strong creative reason in "summary.screenTimeOverrides"; without one, shorten the shot.
-- A source clip appears at most twice, and the second use only when it looks clearly different: at most about 35-40 % source overlap between two longer uses, never for a static clip, never for secondary clips, never just to fill time.
-- Playback speed: respect "playback" from the analysis. With "normal", stay at 1.0 unless picture and music both clearly gain from a change; then give "speedReason". Never change speed to squeeze or stretch material; never with "avoid speed change".
-- Speed ramps (forward only): rare and purposeful (a build into a strong downbeat, a drop, an energy rise) on a stable camera range. "points": [{"atSource": source s, "speed": n}], ascending, inside the shot's source range; speed changes linearly between points.
+LENGTH IS A RESULT, NOT A TARGET
+- There is no fixed minimum or maximum length. The length follows from amount x quality x usable material, property relevance, music and dramaturgy: 5 strong clips can make a short film; 10-15 strong, different clips can make a longer one; many clips with weak ones among them do not automatically make a long film.
+- Ask "is there material left that makes this film better?", never "we still need 4 seconds". No repeats, secondary clips, reverse, speed changes or slow shots just for length. But do not throw good material away either: neither "we must reach 23 s" nor "only primary clips and stop at 16 s". The question is: how long is the best film from this material?
+- The music always starts at the section start and runs in one piece for exactly as long as the edit (it fades out at the end); end on a musically clean point (a bar start or a strong beat). The section is the maximum.
+- Explain the decision in "summary.durationDecision".
 
-REVERSE AND DIRECTION CHANGES (creative tool, not a default, but check it actively for every strong push-in: a forward move that turns smoothly and pulls back can make a hero shot longer without its weak end)
-- A shot may play a range backwards ("playback": {"direction": "reverse", "speed": n}, sourceStart > sourceEnd), or change direction once inside one continuous shot: "segments": [{"sourceStart": 0.6, "sourceEnd": 2.8, "speed": 1.0}, {"sourceStart": 2.8, "sourceEnd": 1.4, "speed": 1.0}]. The camera moves in, reaches a good point, the move reverses and pulls back out. Use it to let a strong clip run longer without its weak end, to pull back before a drop, to move out of a room after a peak, or to stretch a hero shot over a build.
-- A direction change gets a smooth turnaround (speed falls to 0 and rises again): "turnaround": {"enabled": true, "type": "smooth", "duration": 0.4-0.8 s}. Never a hard flip from 1.0 to -1.0.
-- Forward->reverse is a special tool: normally at most ONE prominent forward->reverse hero shot per 20-30 s video. A second only if it looks visually clearly different, the music strongly carries it and it does not read as a repeated boomerang trick; then justify it in "summary.secondReverseJustification". Never use reverse to gain length. At most one direction change per shot, no forward-reverse-forward.
-- A turnaround does not license screen time far above recommendedMax.
-- Only on suitable ranges: calm camera moves, clean forward moves, architecture, living room, kitchen, exterior, terrace, stable geometry. Not on visible AI artefacts, strong light changes, water or anything moving that looks wrong backwards (pool water, people, curtains, leaves), morphing or bad end frames. Reverse never rescues a bad range: it turns at or before the end of SAFE, it never runs into a weak range first.
-- Every reverse shot needs "speedReason" (why the picture and the music profit).
+MATERIAL ROLES
+- Primary / hero: the main selling images (exterior, living, living/dining, kitchen, terrace, balcony, pool, garden, view, strong architecture). They get the most screen time and the key musical moments; show a strong selling point early (not necessarily shot 1, but do not save all top clips for the second half).
+- Support: good complementary scenes (bedroom, second living area, good side rooms, another outside angle). Somewhat less time.
+- Micro insert candidates: weaker but visually usable scenes (bathroom, dressing room, hallway, detail, secondary room). A secondary clip is NOT automatically filler: as a micro insert of about 0.4-1.1 s from its best range only, placed rhythmically (a burst before a drop, a quick sequence after a peak, a short transition, supporting a hero shot), it adds variety and information. Check every candidate and record the decision in "summary.microInsertCheck"; use it only if it makes the film better, never automatically.
+- Avoid: clearly visible AI artefacts (when not essential), very weak composition, strong distortion, unusable motion, irrelevant scenes. Never as bridge, filler or micro insert. If only part of a clip is problematic, use only a clean range; usableStart/usableEnd and detectedProblems stay the source of truth.
+- Screen time follows relevance: primary > support > micro insert. A bathroom does not run as long as the main living room. recommendedMin/MaxScreenTime are important guides; more than about 20-25 % above recommendedMax only with real added value, named in "summary.screenTimeOverrides". Reverse never justifies exceeding it.
+- Clips may be left out (weak secondary clips, redundant rooms, bad AI clips, very similar angles), but check secondary clips as micro inserts first.
 
-CUTS AND TRANSITIONS
-- Strong beats, downbeats, drops and energy changes stay important: use them for the moments that matter (a reveal on the drop, a hero shot on the energy jump), and let other cuts fall on ordinary beats or phrase ends. Short bursts (0.5-0.9 s per shot) only where style and music carry them, followed by a calmer shot.
-- Transitions: "hard-cut" is the default. Allowed: hard-cut, crossfade, dip-to-black, fade-in (first shot only), fade-out (last shot only), none (first shot's transitionIn, last shot's transitionOut). Do not put effects between all clips. A soft transition sits centred on the cut and needs source handles of half its duration on both sides, also inside SAFE; keep it at most 40 % of each neighbouring shot.
-- Timeline: shots are contiguous from 0 to videoDuration, without gaps; a shot's timelineEnd equals the next shot's timelineStart.
-- Arithmetic: duration = timelineEnd - timelineStart; constant speed: source span = duration x speed. The code recomputes the last source time of each shot and checks everything.
+REUSE
+- A clip may appear twice when the second use has a visually different purpose, e.g. a 0.6 s teaser from an early range and later a 3.0 s hero from another range. Never show nearly the same range twice: more than about 35-40 % source overlap between two longer uses is normally avoided. Static clips normally appear once. Secondary material is not repeated.
 
-SELF-REVIEW before answering: look at your shot list as a viewer. Does it look like an algorithm dealing clips onto bars (equal lengths, a cut on every bar, the best room only after 10 s, weak rooms in to fill time, repeats of the same range)? Fix that, then write one honest sentence into "summary.selfReview".
+MUSIC AND CUTS
+- Beats, downbeats, bars, drops, peaks and energy changes are creative anchors, not a grid: not every cut on a bar start, not one bar = one shot, not half a bar = one insert. Cut first for picture and story, then let it sit cleanly on the music.
+- Shot lengths may vary strongly (e.g. 0.55, 0.8, 1.15, 1.7, 2.25, 2.8, 3.4, 4.0 s) when material and music justify it; no forced randomness, but no visible mathematical pattern.
+- Fast bursts (e.g. 0.6 s secondary, 0.7 s detail, 0.8 s bedroom, then a 2.7 s hero) work before a drop, after an energy rise or in denser passages; afterwards give the film room to breathe.
+- Transitions: hard cuts are standard. Dynamic: mostly hard cuts. Cinematic: mostly hard cuts plus a few purposeful crossfades or dip-to-black. Elegant: some more soft transitions. Never an effect between every clip. Allowed: hard-cut, crossfade, dip-to-black, fade-in (first shot only), fade-out (last shot only), none (first shot's transitionIn, last shot's transitionOut). A soft transition sits centred on the cut and needs source handles of half its duration on both sides, inside SAFE; at most 40 % of each neighbouring shot.
+
+SOURCE AND SPEED
+- Stay inside SAFE (hard). Prefer the strongest range. Never weak ranges, problem ranges or ranges across a hard cut. Cut shorter rather than longer.
+- Playback speed: respect "playback" from the analysis; with "normal" stay at 1.0 unless picture and music both clearly gain, then give "speedReason". Never "avoid speed change" violations, never speed changes for length.
+- Speed ramps (forward only): rare and purposeful on a stable camera range. "points": [{"atSource": source s, "speed": n}], ascending, inside the shot's source range.
+
+REVERSE (creative tool, never for length)
+- Check it actively where it gives a visual or musical advantage: a clean push-in that comes to a gentle stop and pulls back (e.g. source 0.5 -> 2.8 forward, then 2.8 -> 1.6 reverse) can make a strong hero shot without the weak end. Keep the way back clearly shorter than the way in.
+- Good on: living room, kitchen, bedroom, architecture, calm push-ins, clean camera moves. Avoid on: people, visible water movement, plant movement where reverse shows, static clips, strong AI artefacts, morphing, noticeable light changes.
+- Rare enough to read as a deliberate technique: in a typical short property film normally at most ONE prominent forward->reverse hero; a second only if it looks clearly different, the music justifies it and there is no boomerang feeling ("summary.secondReverseJustification"). Not a rigid limit, but do not overuse it.
+- Pure reverse: "playback": {"direction": "reverse", "speed": n} with sourceStart > sourceEnd. Direction change: "segments": [{"sourceStart": 0.5, "sourceEnd": 2.8, "speed": 1.0}, {"sourceStart": 2.8, "sourceEnd": 1.6, "speed": 1.0}] with "turnaround": {"enabled": true, "type": "smooth", "duration": 0.4-0.8 s}: speed falls smoothly to 0 and rises the other way (1.0 -> 0.6 -> 0.2 -> 0 -> -0.2 -> -0.6 -> -1.0), never a hard flip. At most one direction change per shot.
+- Every reverse shot needs "speedReason".
+
+TIMELINE AND ARITHMETIC
+- Shots are contiguous from 0 to videoDuration without gaps; a shot's timelineEnd equals the next shot's timelineStart. duration = timelineEnd - timelineStart; constant speed: source span = duration x speed. The code recomputes the last source time of each shot and checks everything.
+
+SELF-REVIEW before answering: look at the shot list as a viewer. Does it look like an algorithm (equal lengths, a cut on every bar, the best room only late, weak rooms in to fill time, the same range twice, reverse to gain seconds, good material left unused)? Fix it, then write one honest sentence into "summary.selfReview".
 
 OUTPUT JSON only. Write every free-text value in German, concise (reason at most 30 words). Use the clip ids (K1...).
-{"directorAnalysis": {"sells": string, "strongest": string, "supporting": string, "goodRanges": string, "musicDevelopment": string, "syncPoints": string, "dramaturgy": string, "fillerClips": [clip id] (clips that add nothing to this video; they are not used)},
+{"directorAnalysis": {"sells": string, "mainArguments": string (the 2-4 motifs), "strongest": string (hero clips), "supporting": string (support clips), "microInserts": string (which candidates work as inserts and where), "goodRanges": string, "musicDevelopment": string, "syncPoints": string, "dramaturgy": string (opening, build, peak, ending), "naturalLength": string, "fillerClips": [clip id] (clips that add nothing; they are not used)},
  "creative": {"opening": string, "build": string, "energyMiddle": string, "heroMoments": string, "finale": string},
- "summary": {"overallDramaturgy": string, "editingConcept": string, "heroClips": [clip id], "omitted": [{"clip": clip id, "reason": string}], "selfReview": string, "keptSecondary": [{"clip": clip id, "reason": string}] (each used C/D/E clip), "screenTimeOverrides": [{"clip": clip id, "reason": string}] (each clip more than 20 % above recommendedMax), "secondReverseJustification": null or string, "unresolved": [{"id": review point id, "reason": string}] (only in a repair: points that are impossible with this material)},
+ "summary": {"overallDramaturgy": string, "editingConcept": string, "heroClips": [clip id], "omitted": [{"clip": clip id, "reason": string}], "selfReview": string,
+   "durationDecision": {"finalDuration": number, "reason": string, "primaryMaterialSeconds": number, "supportMaterialSeconds": number, "microInsertSeconds": number, "whyNotLonger": string, "whyNotShorter": string},
+   "microInsertCheck": [{"clip": clip id, "use": "insert" or "omit", "reason": string}] (every micro insert candidate), "screenTimeOverrides": [{"clip": clip id, "reason": string}] (each clip more than 20 % above recommendedMax), "secondReverseJustification": null or string, "unresolved": [{"id": review point id, "reason": string}] (only in a repair: points that are impossible with this material)},
  "videoDuration": number,
  "shots": [{"clip": clip id, "timelineStart": number, "timelineEnd": number,
    "sourceStart": number, "sourceEnd": number, "playback": {"direction": "forward" or "reverse", "speed": number},
    "segments": null or [{"sourceStart": number, "sourceEnd": number, "speed": number}] (only for one direction change; then sourceStart/sourceEnd/playback are ignored),
-   "turnaround": null or {"enabled": true, "duration": number},
+   "turnaround": null or {"enabled": true, "type": "smooth", "duration": number},
    "speedRamp": null or {"points": [{"atSource": number, "speed": number}], "reason": string},
    "speedReason": null or string (required for any speed change, ramp or reverse),
    "transitionIn": string, "transitionOut": string, "transitionDuration": number (0 for hard-cut),
-   "role": string (e.g. opening-hero, establishing, teaser, hero, detail, burst, bridge, pull-back, finale), "musicalMoment": string (what in the music this shot starts on or serves, or "free cut on a beat"), "reason": string}]}`;
+   "role": string (e.g. opening-hero, establishing, teaser, hero, support, micro-insert, burst, bridge, pull-back, finale), "musicalMoment": string (what in the music this shot starts on or serves, or "free cut on a beat"), "reason": string}]}`;
   }
   const compactShots = ai => C((ai.shots || []).map(s => ({ clip: s.clip, src: [s.sourceStart, s.sourceEnd], tl: [s.timelineStart, s.timelineEnd], speed: s.playbackSpeed, ramp: s.speedRamp ? s.speedRamp.points : null, out: s.transitionOut, role: s.role })));
   function regenPrompt(prev) {
@@ -894,14 +950,14 @@ OUTPUT JSON only. Write every free-text value in German, concise (reason at most
   function repairPrompt(cur, n, L, extra) {
     const { ai, plan: p, val, rev } = cur, cs = S.clip.data, list = a => a.map(x => `- ${x.msg}`).join("\n") || "- none";
     const usage = rev.capacity.per.map(x => { const c = cs.clips.find(k => k.ref === x.ref), sh = p.shots.filter(s => s.clip === c);
-      return `- ${x.ref} ${x.filename} (${c.roomType}, class ${c.priorityClass}): SAFE ${c.safe.join("-")} s, max ${c.maxScreen ?? "?"} s, ${"CDE".includes(c.priorityClass) ? "secondary (left out by default)" : `reverse turnaround ${x.canTurn ? "suitable" : "not suitable"}`}${artifactShare(c) >= 0.7 ? ", visible artefact over the whole range" : ""}; in V${n}: ${sh.length ? `${sh.length} use(s), ${fx3(sum(sh.map(s => s.dur)))} s, ranges ${sh.map(s => `${fx3(s.lo)}-${fx3(s.hi)}`).join(", ")}` : "not used"}`; }).join("\n");
+      return `- ${x.ref} ${x.filename} (${c.roomType}, class ${c.priorityClass}): SAFE ${c.safe.join("-")} s, max ${c.maxScreen ?? "?"} s, role ${x.role}${x.role === "micro" ? ` (insert range ${c.strongest[0]}-${r3(Math.min(c.strongest[1], c.strongest[0] + MICRO_MAX))} s)` : x.role === "avoid" ? "" : `, reverse turnaround ${x.canTurn ? "suitable" : "not suitable"}`}${artifactShare(c) >= 0.7 ? ", visible artefact over the whole range" : ""}; in V${n}: ${sh.length ? `${sh.length} use(s), ${fx3(sum(sh.map(s => s.dur)))} s, ranges ${sh.map(s => `${fx3(s.lo)}-${fx3(s.hi)}`).join(", ")}` : "not used"}`; }).join("\n");
     return `\n\nPLAN V${n} (your previous plan, at the end) was checked by code against both analyses and reviewed the way a senior editor would review it. It is NOT final. Write PLAN V${n + 1}.
-Rebuild the edit where needed instead of patching numbers. Allowed and expected: remove shots, leave clips out completely, reorder, change source ranges, shot lengths and cut points, shorten the video (anything from 23 s to ${r3(L)} s; the music simply ends earlier inside the section, it is never cut), remove repeats or plan a clearly different reuse, add a reverse turnaround on a suitable push-in, change speed and transitions. Keep only what is really good.
+Rebuild the edit where needed instead of patching numbers. Allowed and expected: remove shots, leave clips out completely, add a micro insert, reorder, change source ranges, shot lengths and cut points, make the video shorter or longer (up to ${r3(L)} s; the length follows the material, the music runs in one piece as long as the edit), remove repeats or plan a clearly different reuse, add a reverse turnaround on a suitable push-in, change speed and transitions. Keep only what is really good.
 Every CREATIVE point must be gone in V${n + 1}. Only if a point is truly impossible with this material, keep it and list it in "summary.unresolved" with the reason.
 ERRORS (must be fixed):\n${list(val.errors)}
 CREATIVE (must be fixed; "target" is what V${n + 1} has to reach):\n${rev.repair.map(x => `- [${x.id}] ${x.msg} -> target: ${x.fix}${x.avoidable ? "" : " (code note: may be unavoidable with this material)"}`).join("\n")}
 WARNINGS (fix where it helps):\n${list(val.warnings)}
-MATERIAL: strong material without filler about ${fx3(rev.capacity.total)} s; a shorter video is fine. Per clip:\n${usage}
+MATERIAL (code estimate): primary ${fx3(rev.capacity.primary)} s, support ${fx3(rev.capacity.support)} s, micro inserts ${fx3(rev.capacity.micro)} s, together about ${fx3(rev.capacity.total)} s. Per clip:\n${usage}
 PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: ai.shots })}${extra || ""}`;
   }
   function extractJSON(text) {
@@ -1056,7 +1112,7 @@ PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: a
     if (!ready()) { $("budget").innerHTML = ""; return; }
     const cs = S.clip.data, sec = sectionOf(S.music.data, S.secKey), safe = sum(cs.clips.map(c => Math.max(0, c.safe[1] - c.safe[0]))), strong = sum(cs.clips.map(c => c.strongest[1] - c.strongest[0]));
     const cap = materialCapacity(cs);
-    $("budget").innerHTML = `<p class="notice ${cap.total >= 23 ? "info" : ""}">Material: ${fx(safe, 1)} s sichere Quellzeit (davon ${fx(strong, 1)} s stärkste Bereiche) in ${cs.clips.length} Clips. Starkes Material ohne Füllstoff (A/B-Clips ohne Artefakt, recommendedMax +20 %, keine Wiederholung, ein Turnaround) trägt etwa ${fx(cap.total, 1)} s. Ziel sind etwa 23 s, keine Pflicht: ist weniger starkes Material da, wird das Video kürzer.</p>`;
+    $("budget").innerHTML = `<p class="notice info">Material: ${fx(safe, 1)} s sichere Quellzeit in ${cs.clips.length} Clips. Code-Einschätzung: Hauptmaterial ${fx(cap.primary, 1)} s, Support ${fx(cap.support, 1)} s, Micro Inserts ${fx(cap.micro, 1)} s, zusammen etwa ${fx(cap.total, 1)} s ohne Wiederholung oder Dehnung (${cap.per.filter(x => x.role === "avoid").map(x => x.filename).join(", ") || "nichts"} als Avoid). Es gibt keine feste Ziellänge: die Länge folgt aus Material, Musik und Dramaturgie, höchstens ${fx(sec.duration, 1)} s (Musikabschnitt).</p>`;
   }
   function render() {
     $("styles").innerHTML = Object.entries(STYLES).map(([k, s]) => `<button data-style="${k}" aria-pressed="${k === S.style}">${s.label}<span>${s.ui}</span></button>`).join("");
@@ -1137,6 +1193,9 @@ PLAN V${n}: ${C({ videoDuration: ai.videoDuration, summary: ai.summary, shots: a
         <span class="muted">Hero-Clips</span><span>${esc(sm.primaryHeroClips.join(", ") || "–")}</span>
         <span class="muted">Dramaturgie</span><span>${esc(sm.overallDramaturgy)}</span>
         <span class="muted">Schnittkonzept</span><span>${esc(sm.editingConcept)}</span>
+        ${ai.summary?.durationDecision ? (dd => `<span class="muted">Längenentscheidung</span><span><b>${fx(dd.finalDuration, 2)} s</b> · ${esc(dd.reason)}<br><span class="small muted">Hauptmaterial ${fx(dd.primaryMaterialSeconds, 1)} s · Support ${fx(dd.supportMaterialSeconds, 1)} s · Micro Inserts ${fx(dd.microInsertSeconds, 1)} s</span><br><span class="small">Warum nicht länger: ${esc(dd.whyNotLonger)}</span><br><span class="small">Warum nicht kürzer: ${esc(dd.whyNotShorter)}</span></span>`)(ai.summary.durationDecision) : ""}
+        <span class="muted">Material (Code)</span><span class="small">${rev.capacity.per.filter(x => x.role !== "avoid").length} nutzbare Clips: ${["primary", "support", "micro", "avoid"].map(r => { const l = rev.capacity.per.filter(x => x.role === r); return l.length ? `${{ primary: "Haupt", support: "Support", micro: "Micro Insert", avoid: "Avoid" }[r]}: ${l.map(x => esc(x.filename)).join(", ")}` : ""; }).filter(Boolean).join(" · ")}; trägt etwa ${fx(rev.capacity.total, 1)} s</span>
+        ${(ai.summary?.microInsertCheck || []).length ? `<span class="muted">Micro Inserts geprüft</span><span class="small">${ai.summary.microInsertCheck.map(m => `${esc(cs.clips.find(c => c.ref === m.clip)?.filename || m.clip)}: ${m.use === "insert" ? "<b>Insert</b>" : "weggelassen"} · ${esc(m.reason)}`).join("<br>")}</span>` : ""}
         <span class="muted">Shot-Längen</span><span class="mono small">${p.shots.map(s => fx(s.dur, 2)).join(" · ")}</span>
         <span class="muted">Erster Selling Point</span><span>${sm.firstStrongSellingPointAt != null ? `ab ${fx(sm.firstStrongSellingPointAt, 2)} s` : "–"}</span>
         ${sm.reverseShots.length ? `<span class="muted">Reverse</span><span>${sm.reverseShots.map(r => `Shot ${r.shotNumber} (${esc(r.direction)}): ${esc(r.reason || "ohne Begründung")}`).join("<br>")}</span>` : ""}

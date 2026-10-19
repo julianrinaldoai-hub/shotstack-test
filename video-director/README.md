@@ -66,22 +66,29 @@ Für den Plan rechnet der Code den gewählten Abschnitt in **Videozeit** um: Tra
    - nur usableStart bis usableEnd, Übergangs-Handles eingeschlossen
    - kein schwacher Anfang oder schwaches Ende, keine harten Probleme, kein harter Schnitt im Clip; Hinweise bei leichten Problemen und `perspectiveWorseFrom`
    - Timeline lückenlos von 0 bis Videolänge, Shots mindestens 0,4 s
-   - Musik am Stück, Video innerhalb des Abschnitts, 23–32 s
+   - Musik am Stück, Video innerhalb des Abschnitts (keine feste Länge)
    - jeder Clip höchstens 2×; Hinweis bei gleichem Source-Bereich, wiederholten Nebenräumen oder demselben Clip direkt hintereinander
    - Nebenräume (C–E) nicht über ihrer empfohlenen Screentime und nicht länger als der schwächste genutzte A-Clip
    - A-Clips sind im Plan enthalten (Pflicht), B-Clips sollten es sein; beide haben genug Screentime
    - Speed-Rechnung stimmt, Speed bleibt in 0,5–2,0 und passt zu `recommendedPlayback`, Speed-Ramps sind begrenzt und begründet
    - Übergänge erlaubt, auf beiden Seiten gleich, höchstens 40 % der Shot-Länge, Anzahl passend zum Style
    - Musik-Sync: jeder Schnitt auf Beat, Downbeat, Drop oder Section-Wechsel
-4. **Kreative Prüfung (Code, Regeln v2):** Wirkt der Schnitt wie von einem Menschen? Punkte mit „repair“ gehen zurück an Claude:
+4. **Kreative Prüfung (Code, Regeln v2–v5):** Wirkt der Schnitt wie von einem Menschen? Punkte mit „repair“ gehen zurück an Claude:
    - Taktraster: mindestens 60 % der Shots genau 1, 2 oder mehr Takte lang, sichtbar wiederkehrende Shot-Längen, oder fast jeder Taktanfang hat einen Schnitt
    - kein starker Selling Point in den ersten 6 s (Klasse A, Rang 1–2 oder starker B-Raum)
    - eine zweite Verwendung mit mehr als 40 % Source-Overlap, oder eine Wiederholung eines statischen Clips
    - Screentime: Nebenclips über recommendedMax; A/B mehr als 20 % darüber ohne Grund in `summary.screenTimeOverrides`, mehr als 50 % immer; Nebenclips über 25 % des Videos
    - Speed entgegen der Analyse: bei „normal“ über ±25 %, oder über ±10 % ohne `speedReason`
    - sichtbares Artefakt (artifact, morph, warp …) im genutzten Bereich; ein Clip, dessen Artefakt mindestens 70 % des nutzbaren Bereichs abdeckt und der nicht Klasse A ist, wird gar nicht verwendet (`artifact-clip`)
-   - Füllstoff (`filler`): ein Clip aus der eigenen Liste `directorAnalysis.fillerClips`, oder ein C/D/E-Clip ohne Begründung in `summary.keptSecondary`. Nebenclips bleiben standardmäßig weg.
-   - Video unter 22,5 s: Ziel sind etwa 23 s, keine Pflicht. Unvermeidbar, wenn das starke Material ohne Füllstoff nicht mehr trägt.
+   - Füllstoff (`filler`): ein Clip aus der eigenen Liste `directorAnalysis.fillerClips` wird trotzdem verwendet
+   - Materialnutzung (Regeln v5):
+     - A: Hauptmaterial fehlt oder bekommt zu wenig Zeit (`primary-unused`, `primary-underused`)
+     - B: Micro Insert länger als etwa 1,1 s, oder ein Nebenclip länger als die Hälfte des kürzesten Hauptclips (`micro-long`, `micro-vs-primary`)
+     - C: ein Micro-Insert-Kandidat ohne Entscheidung in `summary.microInsertCheck` (`micro-unchecked`)
+     - D: Artefakt-Clip wird verwendet (`artifact-clip`)
+     - E: der Reverse-Rückweg ist fast so lang wie die Fahrt hinein, also Verlängerung statt Pull-back (`reverse-stretch`)
+     - F: Nebenmaterial wird wiederholt (`repeat-secondary`)
+     - G: Die Länge passt nicht zum Material: unter 85 % oder über 115 % der natürlichen Länge; `summary.durationDecision` fehlt (`length-fit`, `duration-decision`)
    - Reverse: mehr als eine Forward→Reverse-Sequenz ohne Begründung in `summary.secondReverseJustification` (höchstens zwei), mehr als 2 Reverse-Shots, mehr als ein Richtungswechsel pro Shot, Wechsel ohne Turnaround, ohne Begründung, oder auf Material, bei dem die Analyse Wasser, Menschen, Vorhänge oder Ähnliches nennt bzw. Artefakte oder Lichtprobleme meldet
 5. **Reparatur (Regeln v3): PLAN V1 → Prüfung → PLAN V2 → Prüfung → PLAN V3**, höchstens 2 Reparaturrunden.
    - **Auslöser:** Hat ein Plan technische Fehler oder vermeidbare kreative Punkte, ist er nicht final.
@@ -105,23 +112,25 @@ Für den Plan rechnet der Code den gewählten Abschnitt in **Videozeit** um: Tra
      - Jeder offene Punkt wird mit Begründung angezeigt: vermeidbar oder unvermeidbar, dazu Claudes Erklärung aus `summary.unresolved`.
      - Export erst nach ausdrücklicher Bestätigung (Checkbox). Im JSON stehen dann `meta.status` und `acceptedUnresolved: true`.
    - **`failed`:** technische Fehler. Der Export ist gesperrt.
-   - **Unvermeidbar** ist nur die Videolänge, und nur wenn das starke Material ohne Füllstoff nicht reicht.
-     - Gerechnet wird mit A/B-Clips ohne flächiges Artefakt, je höchstens recommendedMax +20 %, ohne Wiederholungen, mit einem Turnaround und mit Sicherheitsabstand: unter 23,5 s.
+   - **Unvermeidbar:** Seit Regeln v5 gibt es keine Längenvorgabe mehr und damit derzeit keinen Punkt, der automatisch als unvermeidbar gilt. Der Mechanismus bleibt für künftige Regeln.
      - Wiederholungen, Überschreitungen und Artefakte lassen sich immer wegschneiden; der Preis ist ein kürzeres Video.
 
 Die technische Prüfung (Schritt 3) ist gegenüber Regeln v1 unverändert. Sie liest den Source-Bereich jetzt aus allen Segmenten eines Shots, damit sie auch Reverse-Shots prüft.
 
 **Regenerate Plan** gibt Claude den vorherigen Plan mit. Ein neuer Plan darf ähnlich sein, wenn der alte gut zur Musik passt.
 
-## Schnittlogik (Regeln v2–v4)
+## Schnittlogik (Regeln v2–v5)
 
 Priorität: 1 Zuschauerinteresse, 2 starke Immobilie zeigen, 3 visueller Flow, 4 musikalischer Flow, 5 Style, 6 technisches Raster.
 
 - **Marker statt Raster:** Musikmarker sind Orientierung. Ein Shot darf mitten im Takt auf einem Beat beginnen, mehrere Takte überspannen oder einen Marker überspringen.
 - **Shot-Längen:** variieren natürlich, ohne erkennbares Muster.
 - **Selling Point früh:** ein sehr starker Clip in den ersten 3–6 s.
-- **Auslassen:** Nebenclips (C/D/E) bleiben standardmäßig weg. Behalten nur mit Begründung in `summary.keptSecondary`. Was der Director selbst Füllstoff nennt, fliegt raus.
-- **Länge:** Etwa 23 s sind das Ziel, keine Pflicht. Qualität geht vor: Trägt das starke Material weniger, wird das Video kürzer, statt Füllstoff, Wiederholungen oder Reverse für Länge einzusetzen. Die Musik läuft am Stück und blendet am Videoende aus.
+- **Materialrollen:** Der Code schlägt pro Clip eine Rolle vor, Claude entscheidet: Hauptmaterial (A, oder B in einem starken Raum), Support (übrige B), Micro-Insert-Kandidat (C/D), Avoid (Artefakt über mindestens 70 % und nicht A, Klasse E, oder unter 0,4 s nutzbar). Nebenclips sind kein automatischer Füllstoff: als Micro Insert von 0,4–1,1 s aus dem besten Bereich, rhythmisch gesetzt, können sie den Film besser machen. Jeder Kandidat wird geprüft, eingesetzt wird er nur, wenn er hilft.
+- **Länge ist ein Ergebnis, kein Ziel:** Es gibt keine feste Mindest- oder Maximallänge; die frühere 23-s-Regel und das 23–32-s-Fenster der technischen Prüfung sind entfernt.
+  - Der Code schätzt die natürliche Länge des Materials: Hauptmaterial und Support je bis recommendedMax +20 %, ein Turnaround auf dem besten Push-in, ein Micro Insert pro Kandidat, keine Wiederholung oder Dehnung.
+  - Claude begründet die gewählte Länge in `summary.durationDecision`: finalDuration, reason, primaryMaterialSeconds, supportMaterialSeconds, microInsertSeconds, whyNotLonger, whyNotShorter.
+  - Die Musik läuft vom Abschnittsstart am Stück, genau so lang wie der Edit; das Maximum ist die Länge des gewählten Musikabschnitts. Trägt das Material mehr, weist die Prüfung darauf hin (dann einen längeren Abschnitt wählen).
 - **Wiederholung:** nur mit klar anderem Bereich (höchstens ca. 35–40 % Overlap), nie bei statischen oder Nebenclips.
 - **Speed:** `recommendedPlayback` gilt. Abweichungen nur mit `speedReason`.
 - **Reverse:** Forward→Reverse ist ein Spezialwerkzeug. Bei 20–30 s normalerweise höchstens eine prominente Sequenz; eine zweite nur, wenn sie visuell klar anders wirkt und die Musik sie stark trägt. Nie für Länge.
